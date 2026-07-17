@@ -1,0 +1,107 @@
+{
+  "entities": {
+    "Notice": {
+      "title": "Notice",
+      "description": "A notice or news item.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "excerpt": { "type": "string" },
+        "content" : { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "category": { "type": "string", "enum": ["Academic", "Holiday", "Events", "Committee", "General"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "excerpt", "date", "category", "createdAt", "updatedAt"]
+    },
+    "StaffMember": {
+      "title": "StaffMember",
+      "description": "A staff member or teacher.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "phone": { "type": "string" },
+        "subject": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "category": { "type": "string", "enum": ["Teaching", "Non-Teaching", "Management", "PTA", "Advisory", "SocialAudit"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "role", "category", "createdAt", "updatedAt"]
+    },
+    "GeneralSettings": {
+      "title": "GeneralSettings",
+      "description": "General settings for the school.",
+      "type": "object",
+      "properties": {
+        "phoneNumbers": { "type": "array", "items": { "type": "string" } },
+        "email": { "type": "string", "format": "email" },
+        "address": { "type": "string" },
+        "mapLocation": { "type": "string" },
+        "facebookUrl": { "type": "string" },
+        "instagramUrl": { "type": "string" },
+        "twitterUrl": { "type": "string" },
+        "youtubeUrl": { "type": "string" },
+        "aboutText": { "type": "string" },
+        "principalMessage": { "type": "string" },
+        "heroTitle": { "type": "string" },
+        "heroSubtitle": { "type": "string" },
+        "principalImageUrl": { "type": "string" },
+        "heroImageUrl": { "type": "string" },
+        "announcementText": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["phoneNumbers", "email", "address", "createdAt", "updatedAt"]
+    },
+    "PhotoInfo": {
+      "title": "PhotoInfo",
+      "description": "Information about a photo.",
+      "type": "object",
+      "properties": {
+        "url": { "type": "string", "format": "uri" },
+        "caption": { "type": "string" },
+        "category": { "type": "string", "enum": ["Gallery", "Hero", "Facilities", "Events"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["url", "category", "createdAt", "updatedAt"]
+    },
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "A user with administrative privileges.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "roles": { "type": "array", "items": { "type": "string", "enum": ["admin"] } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "roles", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/notices/{noticeId}": {
+      "schema": { "$ref": "#/entities/Notice" },
+      "description": "Contains notices out to the school."
+    },
+    "/staff/{staffId}": {
+      "schema": { "$ref": "#/entities/StaffMember" },
+      "description": "Contains staff members."
+    },
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/GeneralSettings" },
+      "description": "Contains general site configuration settings."
+    },
+    "/photos/{photoId}": {
+      "schema": { "$ref": "#/entities/PhotoInfo" },
+      "description": "Contains photos used across the application."
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Contains list of admin users by their UID."
+    }
+  }
+}
