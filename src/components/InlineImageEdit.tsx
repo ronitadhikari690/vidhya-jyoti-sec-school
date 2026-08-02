@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import { Upload } from 'lucide-react';
+import { compressImage } from '../utils/imageCompressor';
 
 interface InlineImageEditProps {
   settingKey: string;
@@ -18,29 +19,29 @@ export function InlineImageEdit({ settingKey, fallbackUrl, className = '', alt =
 
   const currentUrl = settings[settingKey] || fallbackUrl;
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     
-    // In a real app we might upload this to Firebase Storage, but here we read it as data URL
-    // since the original code does the same or we use the dataUrl
-    if (file.size > 2 * 1024 * 1024) {
-      alert("Image is too large. Please use an image under 2MB.");
-      return;
-    }
-    
     setUploading(true);
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      try {
-        await updateSetting(settingKey, reader.result as string);
-      } catch (err) {
-        console.error("Failed to save image", err);
-      } finally {
-        setUploading(false);
+    try {
+      const compressedDataUrl = await compressImage(file, 1000, 1000, 0.75);
+      await updateSetting(settingKey, compressedDataUrl);
+    } catch (err) {
+      console.error("Failed to save image", err);
+      alert("Failed to update image. Please try a different image.");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
       }
-    };
-    reader.readAsDataURL(file);
+    }
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    fileInputRef.current?.click();
   };
 
   if (!isAdmin) {
@@ -48,22 +49,32 @@ export function InlineImageEdit({ settingKey, fallbackUrl, className = '', alt =
   }
 
   return (
-    <div className={`relative group ${className}`}>
+    <div 
+      className={`relative group ${className} cursor-pointer`}
+      onClick={handleClick}
+      title="Click to change image"
+    >
       <img src={currentUrl} alt={alt} className="w-full h-full object-cover" />
       <div 
-        className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col items-center justify-center cursor-pointer backdrop-blur-[1px] z-10" 
-        onClick={() => fileInputRef.current?.click()}
+        className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col items-center justify-center backdrop-blur-[1px] z-10 p-1" 
       >
         {uploading ? (
-          <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
         ) : (
           <>
-            <Upload className="w-8 h-8 text-white mb-2 drop-shadow-md" />
-            <span className="text-sm text-white font-bold uppercase tracking-wider drop-shadow-md">Change Image</span>
+            <Upload className="w-4 h-4 text-white drop-shadow-md" />
+            <span className="text-[9px] text-white font-bold uppercase tracking-wider drop-shadow-md text-center leading-tight">Change</span>
           </>
         )}
-        <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
       </div>
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleFileChange} 
+        onClick={(e) => e.stopPropagation()}
+        accept="image/*" 
+        className="hidden" 
+      />
     </div>
   );
 }

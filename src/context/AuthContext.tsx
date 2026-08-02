@@ -7,6 +7,8 @@ interface AuthContextType {
   user: User | null;
   isAdmin: boolean;
   loading: boolean;
+  isLoggingIn: boolean;
+  loginError: string | null;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -17,12 +19,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       
-      if (currentUser && currentUser.emailVerified) {
+      if (currentUser) {
         if (currentUser.email === 'ronitadhikari690@gmail.com') {
           setIsAdmin(true);
         } else {
@@ -45,16 +49,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const loginWithGoogle = async () => {
-    const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    if (isLoggingIn) return;
+    setIsLoggingIn(true);
+    setLoginError(null);
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (e: any) {
+      if (
+        e?.code === 'auth/cancelled-popup-request' ||
+        e?.code === 'auth/popup-closed-by-user' ||
+        e?.message?.includes('cancelled-popup-request') ||
+        e?.message?.includes('popup-closed-by-user')
+      ) {
+        console.warn('Google sign-in popup was closed or cancelled by user.');
+      } else {
+        console.error('Google sign-in error:', e);
+        setLoginError(e?.message || 'Failed to sign in with Google.');
+      }
+    } finally {
+      setIsLoggingIn(false);
+    }
   };
 
   const logout = async () => {
+    setLoginError(null);
     await signOut(auth);
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAdmin, loading, loginWithGoogle, logout }}>
+    <AuthContext.Provider value={{ user, isAdmin, loading, isLoggingIn, loginError, loginWithGoogle, logout }}>
       {children}
     </AuthContext.Provider>
   );

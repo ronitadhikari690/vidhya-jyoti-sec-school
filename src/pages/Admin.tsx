@@ -1,28 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LogIn, LogOut, LayoutDashboard, FileText, Users, Settings as SettingsIcon, Save, Plus, Trash2, Edit, X, Upload } from 'lucide-react';
+import { LogIn, LogOut, LayoutDashboard, FileText, Users, Settings as SettingsIcon, Save, Plus, Trash2, Edit, X, Upload, Cake, Gift, Calendar as CalendarIcon, Image as ImageIcon, Bell } from 'lucide-react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { doc, getDoc, setDoc, collection, getDocs, addDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
+import { compressImage } from '../utils/imageCompressor';
 
 function ImageUpload({ onUpload, label, currentImageUrl }: { onUpload: (url: string) => void, label: string, currentImageUrl?: string }) {
   const [uploading, setUploading] = useState(false);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 1024 * 1024) {
-      alert("This image is quite large! For better performance, please try images smaller than 1MB.");
-    }
-
     setUploading(true);
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      onUpload(reader.result as string);
+    try {
+      const compressed = await compressImage(file, 1000, 1000, 0.75);
+      onUpload(compressed);
+    } catch (err) {
+      console.error('Failed to compress upload', err);
+    } finally {
       setUploading(false);
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   return (
@@ -229,8 +228,21 @@ function NoticesAdmin() {
                 <textarea rows={6} value={formData.content} onChange={e => setFormData({...formData, content: e.target.value})} className="w-full border p-2 rounded-md focus:ring-2 focus:ring-blue-500"></textarea>
               </div>
               <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition">
-                {editingNotice ? 'Update Notice' : 'Published Notice'}
+                {editingNotice ? 'Update Notice' : 'Publish Notice'}
               </button>
+              {editingNotice && (
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    handleDelete(editingNotice.id);
+                    setIsSidebarOpen(false);
+                    setEditingNotice(null);
+                  }}
+                  className="w-full bg-red-50 text-red-600 py-2.5 rounded-lg font-bold hover:bg-red-100 border border-red-200 transition flex items-center justify-center gap-2 mt-2"
+                >
+                  <Trash2 className="w-4 h-4" /> Delete This Notice
+                </button>
+              )}
             </form>
           </div>
         </div>
@@ -371,6 +383,821 @@ function StaffAdmin() {
   );
 }
 
+function BirthdaysAdmin() {
+  const [birthdays, setBirthdays] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<any>(null);
+
+  const [formData, setFormData] = useState({
+    name: '',
+    category: 'Student (Boy)',
+    gradeOrRole: '',
+    birthdayDate: new Date().toISOString().split('T')[0],
+    photoUrl: '',
+    wishMessage: '',
+    wishesCount: 0
+  });
+
+  const categories = ['Student (Boy)', 'Student (Girl)', 'Teacher', 'Staff'];
+
+  useEffect(() => {
+    loadBirthdays();
+  }, []);
+
+  async function loadBirthdays() {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'birthdays'));
+      const docs = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      docs.sort((a: any, b: any) => (a.birthdayDate || '').localeCompare(b.birthdayDate || ''));
+      setBirthdays(docs);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.GET, 'birthdays');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name.trim()) {
+      alert('Please enter a name.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const compressedPhoto = await compressImage(formData.photoUrl || '', 800, 800, 0.75);
+      const payload = {
+        ...formData,
+        photoUrl: compressedPhoto,
+        updatedAt: serverTimestamp()
+      };
+
+      if (editingItem) {
+        await updateDoc(doc(db, 'birthdays', editingItem.id), payload);
+      } else {
+        await addDoc(collection(db, 'birthdays'), {
+          ...payload,
+          createdAt: serverTimestamp()
+        });
+      }
+
+      alert('Birthday entry saved successfully! 🎉');
+      setFormData({
+        name: '',
+        category: 'Student (Boy)',
+        gradeOrRole: '',
+        birthdayDate: new Date().toISOString().split('T')[0],
+        photoUrl: '',
+        wishMessage: '',
+        wishesCount: 0
+      });
+      setEditingItem(null);
+      setIsSidebarOpen(false);
+      loadBirthdays();
+    } catch (e) {
+      console.error('Failed to save birthday entry:', e);
+      handleFirestoreError(e, editingItem ? OperationType.UPDATE : OperationType.WRITE, 'birthdays');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEdit = (item: any) => {
+    setEditingItem(item);
+    setFormData({
+      name: item.name || '',
+      category: item.category || 'Student (Boy)',
+      gradeOrRole: item.gradeOrRole || '',
+      birthdayDate: item.birthdayDate || new Date().toISOString().split('T')[0],
+      photoUrl: item.photoUrl || '',
+      wishMessage: item.wishMessage || '',
+      wishesCount: item.wishesCount || 0
+    });
+    setIsSidebarOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this birthday record?')) {
+      try {
+        await deleteDoc(doc(db, 'birthdays', id));
+        loadBirthdays();
+      } catch (e) {
+        handleFirestoreError(e, OperationType.DELETE, 'birthdays');
+      }
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold flex items-center gap-2">
+          <Cake className="w-6 h-6 text-pink-500" />
+          <span>Manage Birthdays (विद्यार्थी र शिक्षक/कर्मचारीको जन्मदिन)</span>
+        </h2>
+        <button
+          onClick={() => {
+            setEditingItem(null);
+            setFormData({
+              name: '',
+              category: 'Student (Boy)',
+              gradeOrRole: '',
+              birthdayDate: new Date().toISOString().split('T')[0],
+              photoUrl: '',
+              wishMessage: '',
+              wishesCount: 0
+            });
+            setIsSidebarOpen(true);
+          }}
+          className="bg-primary text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-primary-dark transition-colors"
+        >
+          <Plus className="w-5 h-5" />
+          <span>Add Birthday Entry</span>
+        </button>
+      </div>
+
+      {loading ? (
+        <p className="text-gray-500">Loading birthday entries...</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {birthdays.map((b) => (
+            <div key={b.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-3 mb-3">
+                  <img
+                    src={b.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'}
+                    alt={b.name}
+                    className="w-14 h-14 rounded-full object-cover border-2 border-primary/20"
+                  />
+                  <div>
+                    <h3 className="font-bold text-gray-900">{b.name}</h3>
+                    <p className="text-xs text-gray-500">{b.gradeOrRole}</p>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-pink-100 text-pink-800 uppercase tracking-wider inline-block mt-1">
+                      {b.category}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-600 mb-2">
+                  <span className="font-semibold text-gray-700">Date: </span> {b.birthdayDate}
+                </p>
+                {b.wishMessage && (
+                  <p className="text-xs italic bg-amber-50 text-amber-900 p-2 rounded border border-amber-200 mb-3">
+                    "{b.wishMessage}"
+                  </p>
+                )}
+              </div>
+              <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
+                <button
+                  onClick={() => handleEdit(b)}
+                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+                  title="Edit"
+                >
+                  <Edit className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleDelete(b.id)}
+                  className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                  title="Delete"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+          {birthdays.length === 0 && (
+            <div className="col-span-full text-center py-12 bg-white rounded-xl border border-gray-200 text-gray-500">
+              No birthday records found in database yet. Click "Add Birthday Entry" to create one.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Slide-over Form Sidebar */}
+      {isSidebarOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-end">
+          <div className="bg-white w-full max-w-md h-full p-6 overflow-y-auto shadow-2xl animate-in slide-in-from-right duration-200">
+            <div className="flex justify-between items-center mb-6 pb-3 border-b">
+              <h3 className="text-xl font-bold">
+                {editingItem ? 'Edit Birthday Entry' : 'Add New Birthday Entry'}
+              </h3>
+              <button onClick={() => setIsSidebarOpen(false)} className="text-gray-500 hover:text-gray-700">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="e.g. Aayush Adhikari"
+                  className="w-full border rounded-lg p-2.5 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category / Role *</label>
+                <select
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value as any })}
+                  className="w-full border rounded-lg p-2.5 text-sm"
+                >
+                  {categories.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Grade / Subject / Role</label>
+                <input
+                  type="text"
+                  value={formData.gradeOrRole}
+                  onChange={(e) => setFormData({ ...formData, gradeOrRole: e.target.value })}
+                  placeholder="e.g. Grade 10-A or Science Teacher"
+                  className="w-full border rounded-lg p-2.5 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Birthday Date *</label>
+                <input
+                  type="date"
+                  required
+                  value={formData.birthdayDate}
+                  onChange={(e) => setFormData({ ...formData, birthdayDate: e.target.value })}
+                  className="w-full border rounded-lg p-2.5 text-sm"
+                />
+              </div>
+
+              <ImageUpload
+                label="Photo of Birthday Person"
+                currentImageUrl={formData.photoUrl}
+                onUpload={(url) => setFormData({ ...formData, photoUrl: url })}
+              />
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Wish / Congratulations Message</label>
+                <textarea
+                  rows={3}
+                  value={formData.wishMessage}
+                  onChange={(e) => setFormData({ ...formData, wishMessage: e.target.value })}
+                  placeholder="Wishing you a very Happy Birthday! 🎉🎂"
+                  className="w-full border rounded-lg p-2.5 text-sm"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarOpen(false)}
+                  className="w-1/2 border border-gray-300 text-gray-700 py-2.5 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-1/2 bg-primary text-white py-2.5 rounded-lg hover:bg-primary-dark font-medium disabled:opacity-50"
+                >
+                  {submitting ? 'Saving...' : 'Save Entry'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CalendarEventsAdmin() {
+  const [events, setEvents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<any>(null);
+
+  const [formData, setFormData] = useState({
+    title: '',
+    type: 'Pre-Notice',
+    adDate: new Date().toISOString().split('T')[0],
+    description: '',
+    urgency: 'Important'
+  });
+
+  const types = ['Pre-Notice', 'Holiday', 'Event', 'Exam', 'Academic Term'];
+
+  useEffect(() => {
+    loadEvents();
+  }, []);
+
+  async function loadEvents() {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'calendar_events'));
+      const docs = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      docs.sort((a: any, b: any) => (a.adDate || '').localeCompare(b.adDate || ''));
+      setEvents(docs);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.GET, 'calendar_events');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.title.trim()) return;
+    setSubmitting(true);
+    try {
+      const payload = {
+        ...formData,
+        updatedAt: serverTimestamp()
+      };
+
+      if (editingItem) {
+        await updateDoc(doc(db, 'calendar_events', editingItem.id), payload);
+      } else {
+        await addDoc(collection(db, 'calendar_events'), {
+          ...payload,
+          createdAt: serverTimestamp()
+        });
+      }
+
+      setFormData({
+        title: '',
+        type: 'Pre-Notice',
+        adDate: new Date().toISOString().split('T')[0],
+        description: '',
+        urgency: 'Important'
+      });
+      setEditingItem(null);
+      setIsSidebarOpen(false);
+      loadEvents();
+      alert('Calendar Event / Pre-Notice saved successfully! 🎉');
+    } catch (e) {
+      handleFirestoreError(e, editingItem ? OperationType.UPDATE : OperationType.WRITE, 'calendar_events');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEdit = (item: any) => {
+    setEditingItem(item);
+    setFormData({
+      title: item.title || '',
+      type: item.type || 'Pre-Notice',
+      adDate: item.adDate || new Date().toISOString().split('T')[0],
+      description: item.description || '',
+      urgency: item.urgency || 'Important'
+    });
+    setIsSidebarOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Delete this calendar item/pre-notice?')) {
+      try {
+        await deleteDoc(doc(db, 'calendar_events', id));
+        loadEvents();
+      } catch (e) {
+        handleFirestoreError(e, OperationType.DELETE, 'calendar_events');
+      }
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold flex items-center gap-2">
+          <CalendarIcon className="w-6 h-6 text-primary" />
+          <span>Manage Calendar & Pre-Notices (क्यालेन्डर र पूर्व-सूचना)</span>
+        </h2>
+        <button
+          onClick={() => {
+            setEditingItem(null);
+            setFormData({
+              title: '',
+              type: 'Pre-Notice',
+              adDate: new Date().toISOString().split('T')[0],
+              description: '',
+              urgency: 'Important'
+            });
+            setIsSidebarOpen(true);
+          }}
+          className="bg-primary text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-primary-dark transition-colors"
+        >
+          <Plus className="w-5 h-5" />
+          <span>Add Event / Pre-Notice</span>
+        </button>
+      </div>
+
+      {loading ? (
+        <p className="text-gray-500">Loading calendar items...</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {events.map((ev) => (
+            <div key={ev.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-between">
+              <div>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider inline-block mb-2 ${
+                  ev.type === 'Pre-Notice' ? 'bg-amber-100 text-amber-900 border border-amber-300' :
+                  ev.type === 'Holiday' ? 'bg-red-100 text-red-900' :
+                  ev.type === 'Exam' ? 'bg-purple-100 text-purple-900' : 'bg-emerald-100 text-emerald-900'
+                }`}>
+                  {ev.type}
+                </span>
+                <h3 className="font-bold text-gray-900 mb-1">{ev.title}</h3>
+                <p className="text-xs text-gray-500 mb-2">📅 Date: {ev.adDate}</p>
+                {ev.description && <p className="text-xs text-gray-600 bg-gray-50 p-2 rounded">{ev.description}</p>}
+              </div>
+              <div className="flex justify-end gap-2 pt-3 border-t border-gray-100 mt-3">
+                <button onClick={() => handleEdit(ev)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="Edit">
+                  <Edit className="w-4 h-4" />
+                </button>
+                <button onClick={() => handleDelete(ev.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Delete">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+          {events.length === 0 && (
+            <div className="col-span-full text-center py-12 bg-white rounded-xl border border-gray-200 text-gray-500">
+              No calendar items or pre-notices in database. Click "Add Event / Pre-Notice" to create one.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Slide-over Form Sidebar */}
+      {isSidebarOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-end">
+          <div className="bg-white w-full max-w-md h-full p-6 overflow-y-auto shadow-2xl animate-in slide-in-from-right duration-200">
+            <div className="flex justify-between items-center mb-6 pb-3 border-b">
+              <h3 className="text-xl font-bold">
+                {editingItem ? 'Edit Calendar Item' : 'Add Calendar Item / Pre-Notice'}
+              </h3>
+              <button onClick={() => setIsSidebarOpen(false)} className="text-gray-500 hover:text-gray-700">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Title / Notice *</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  placeholder="e.g. Pre-Notice: First Term Exam starts in 10 days"
+                  className="w-full border rounded-lg p-2.5 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Type / Category *</label>
+                <select
+                  value={formData.type}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
+                  className="w-full border rounded-lg p-2.5 text-sm"
+                >
+                  {types.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date (AD) *</label>
+                <input
+                  type="date"
+                  required
+                  value={formData.adDate}
+                  onChange={(e) => setFormData({ ...formData, adDate: e.target.value })}
+                  className="w-full border rounded-lg p-2.5 text-sm"
+                />
+              </div>
+
+              {formData.type === 'Pre-Notice' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Urgency Level</label>
+                  <select
+                    value={formData.urgency}
+                    onChange={(e) => setFormData({ ...formData, urgency: e.target.value as any })}
+                    className="w-full border rounded-lg p-2.5 text-sm"
+                  >
+                    <option value="Normal">Normal Alert</option>
+                    <option value="Important">Important Pre-Notice</option>
+                    <option value="High Alert">🚨 High Alert Deadline</option>
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description / Notes</label>
+                <textarea
+                  rows={3}
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Add details regarding this event..."
+                  className="w-full border rounded-lg p-2.5 text-sm"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarOpen(false)}
+                  className="w-1/2 border border-gray-300 text-gray-700 py-2.5 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-1/2 bg-primary text-white py-2.5 rounded-lg hover:bg-primary-dark font-medium disabled:opacity-50"
+                >
+                  {submitting ? 'Saving...' : 'Save Entry'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GalleryAdmin() {
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<any>(null);
+
+  const [formData, setFormData] = useState({
+    title: '',
+    category: 'Annual Function',
+    mediaType: 'image',
+    url: '',
+    description: '',
+    eventDate: new Date().toISOString().split('T')[0]
+  });
+
+  const categories = ['Annual Function', 'Sports Week', 'Friday ECA', 'Science Exhibition', 'General'];
+
+  useEffect(() => {
+    loadGallery();
+  }, []);
+
+  async function loadGallery() {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'gallery'));
+      const docs = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      setItems(docs);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.GET, 'gallery');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.title.trim() || !formData.url.trim()) return;
+    setSubmitting(true);
+    try {
+      let finalUrl = formData.url;
+      if (formData.mediaType === 'image' && formData.url.startsWith('data:image')) {
+        finalUrl = await compressImage(formData.url, 1200, 1200, 0.8);
+      }
+
+      const payload = {
+        ...formData,
+        url: finalUrl,
+        updatedAt: serverTimestamp()
+      };
+
+      if (editingItem) {
+        await updateDoc(doc(db, 'gallery', editingItem.id), payload);
+      } else {
+        await addDoc(collection(db, 'gallery'), {
+          ...payload,
+          createdAt: serverTimestamp()
+        });
+      }
+
+      setFormData({
+        title: '',
+        category: 'Annual Function',
+        mediaType: 'image',
+        url: '',
+        description: '',
+        eventDate: new Date().toISOString().split('T')[0]
+      });
+      setEditingItem(null);
+      setIsSidebarOpen(false);
+      loadGallery();
+      alert('Gallery item saved successfully! 📸');
+    } catch (e) {
+      handleFirestoreError(e, editingItem ? OperationType.UPDATE : OperationType.WRITE, 'gallery');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEdit = (item: any) => {
+    setEditingItem(item);
+    setFormData({
+      title: item.title || '',
+      category: item.category || 'Annual Function',
+      mediaType: item.mediaType || 'image',
+      url: item.url || '',
+      description: item.description || '',
+      eventDate: item.eventDate || new Date().toISOString().split('T')[0]
+    });
+    setIsSidebarOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Delete this gallery item?')) {
+      try {
+        await deleteDoc(doc(db, 'gallery', id));
+        loadGallery();
+      } catch (e) {
+        handleFirestoreError(e, OperationType.DELETE, 'gallery');
+      }
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold flex items-center gap-2">
+          <ImageIcon className="w-6 h-6 text-indigo-600" />
+          <span>Manage Gallery (ग्यालरी फोटो तथा भिडियोहरू)</span>
+        </h2>
+        <button
+          onClick={() => {
+            setEditingItem(null);
+            setFormData({
+              title: '',
+              category: 'Annual Function',
+              mediaType: 'image',
+              url: '',
+              description: '',
+              eventDate: new Date().toISOString().split('T')[0]
+            });
+            setIsSidebarOpen(true);
+          }}
+          className="bg-primary text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-primary-dark transition-colors"
+        >
+          <Plus className="w-5 h-5" />
+          <span>Add Media Item</span>
+        </button>
+      </div>
+
+      {loading ? (
+        <p className="text-gray-500">Loading gallery items...</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {items.map((g) => (
+            <div key={g.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-between">
+              <div>
+                <div className="relative aspect-video bg-gray-100 rounded-lg overflow-hidden mb-3">
+                  <img src={g.url} alt={g.title} className="w-full h-full object-cover" />
+                  <span className="absolute top-2 left-2 bg-black/70 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase">
+                    {g.category}
+                  </span>
+                </div>
+                <h3 className="font-bold text-gray-900 text-sm mb-1">{g.title}</h3>
+                {g.description && <p className="text-xs text-gray-500 line-clamp-2">{g.description}</p>}
+              </div>
+              <div className="flex justify-end gap-2 pt-3 border-t border-gray-100 mt-3">
+                <button onClick={() => handleEdit(g)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="Edit">
+                  <Edit className="w-4 h-4" />
+                </button>
+                <button onClick={() => handleDelete(g.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Delete">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+          {items.length === 0 && (
+            <div className="col-span-full text-center py-12 bg-white rounded-xl border border-gray-200 text-gray-500">
+              No custom gallery items in database yet. Click "Add Media Item" to create one.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Form Sidebar */}
+      {isSidebarOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-end">
+          <div className="bg-white w-full max-w-md h-full p-6 overflow-y-auto shadow-2xl animate-in slide-in-from-right duration-200">
+            <div className="flex justify-between items-center mb-6 pb-3 border-b">
+              <h3 className="text-xl font-bold">{editingItem ? 'Edit Gallery Item' : 'Add Gallery Item'}</h3>
+              <button onClick={() => setIsSidebarOpen(false)} className="text-gray-500 hover:text-gray-700">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  placeholder="e.g. Annual Function Cultural Dance 2082"
+                  className="w-full border rounded-lg p-2.5 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+                <select
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value as any })}
+                  className="w-full border rounded-lg p-2.5 text-sm"
+                >
+                  {categories.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Media Type *</label>
+                <select
+                  value={formData.mediaType}
+                  onChange={(e) => setFormData({ ...formData, mediaType: e.target.value as any })}
+                  className="w-full border rounded-lg p-2.5 text-sm"
+                >
+                  <option value="image">Image / Photo</option>
+                  <option value="video">Video (YouTube / Direct Link)</option>
+                </select>
+              </div>
+
+              {formData.mediaType === 'image' ? (
+                <ImageUpload
+                  label="Upload Photo"
+                  currentImageUrl={formData.url}
+                  onUpload={(url) => setFormData({ ...formData, url })}
+                />
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Video URL (YouTube Embed Link) *</label>
+                  <input
+                    type="url"
+                    required
+                    value={formData.url}
+                    onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+                    placeholder="e.g. https://www.youtube.com/embed/dQw4w9WgXcQ"
+                    className="w-full border rounded-lg p-2.5 text-sm"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  rows={3}
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Details about this event photo or video..."
+                  className="w-full border rounded-lg p-2.5 text-sm"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarOpen(false)}
+                  className="w-1/2 border border-gray-300 text-gray-700 py-2.5 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-1/2 bg-primary text-white py-2.5 rounded-lg hover:bg-primary-dark font-medium disabled:opacity-50"
+                >
+                  {submitting ? 'Saving...' : 'Save Item'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SettingsAdmin() {
   const [formData, setFormData] = useState({
     email: '',
@@ -386,6 +1213,7 @@ function SettingsAdmin() {
     heroSubtitle: '',
     principalImageUrl: '',
     heroImageUrl: '',
+    school_logo_url: '',
     announcementText: ''
   });
   const [loading, setLoading] = useState(true);
@@ -412,6 +1240,7 @@ function SettingsAdmin() {
             heroSubtitle: data.heroSubtitle || '',
             principalImageUrl: data.principalImageUrl || '',
             heroImageUrl: data.heroImageUrl || '',
+            school_logo_url: data.school_logo_url || '',
             announcementText: data.announcementText || ''
           });
         }
@@ -433,11 +1262,27 @@ function SettingsAdmin() {
     try {
       const docRef = doc(db, 'settings', 'general');
       const phones = formData.phoneNumbers.split(',').map(p => p.trim()).filter(p => p !== '');
-      await setDoc(docRef, {
+      
+      const compressedHero = await compressImage(formData.heroImageUrl || '', 1000, 1000, 0.75);
+      const compressedPrincipal = await compressImage(formData.principalImageUrl || '', 800, 800, 0.75);
+      const compressedLogo = await compressImage(formData.school_logo_url || '', 600, 600, 0.75);
+
+      const payload = {
         ...formData,
+        heroImageUrl: compressedHero,
+        principalImageUrl: compressedPrincipal,
+        school_logo_url: compressedLogo,
         phoneNumbers: phones,
         updatedAt: serverTimestamp()
-      }, { merge: true });
+      };
+
+      await setDoc(docRef, payload, { merge: true });
+      setFormData(prev => ({
+        ...prev,
+        heroImageUrl: compressedHero,
+        principalImageUrl: compressedPrincipal,
+        school_logo_url: compressedLogo
+      }));
       alert('Settings saved successfully!');
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, 'settings/general');
@@ -499,6 +1344,17 @@ function SettingsAdmin() {
           </div>
           <h4 className="font-bold text-primary border-b pb-2 pt-4">Dynamic Images</h4>
           <div className="space-y-6">
+            <div>
+              <ImageUpload 
+                label="School Logo" 
+                currentImageUrl={formData.school_logo_url} 
+                onUpload={(url) => setFormData({...formData, school_logo_url: url})} 
+              />
+              <div className="mt-2">
+                <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Or Paste URL</label>
+                <input type="text" name="school_logo_url" value={formData.school_logo_url} onChange={handleChange} className="w-full border p-2 rounded-md text-sm focus:ring-2 focus:ring-blue-500" placeholder="https://..." />
+              </div>
+            </div>
             <div>
               <ImageUpload 
                 label="Hero Section Image" 
@@ -610,7 +1466,7 @@ function AdminManagement() {
 }
 
 export default function Admin() {
-  const { user, isAdmin, loading, loginWithGoogle, logout } = useAuth();
+  const { user, isAdmin, loading, isLoggingIn, loginError, loginWithGoogle, logout } = useAuth();
   const location = useLocation();
 
   if (loading) return <div className="p-20 text-center text-gray-500">Loading...</div>;
@@ -621,25 +1477,41 @@ export default function Admin() {
         <div className="max-w-md w-full bg-white p-8 rounded-xl shadow-lg text-center">
           <h2 className="text-2xl font-bold mb-6 text-gray-800">Admin Login</h2>
           {user && !isAdmin ? (
-            <div className="mb-6 text-red-600 bg-red-50 p-3 rounded">
+            <div className="mb-6 text-red-600 bg-red-50 p-3 rounded text-sm">
               Your account ({user.email}) does not have admin privileges.
             </div>
           ) : (
-            <p className="mb-8 text-gray-600">Please sign in with an authorized Google account to continue.</p>
+            <p className="mb-6 text-gray-600">Please sign in with an authorized Google account to continue.</p>
+          )}
+
+          {loginError && (
+            <div className="mb-6 text-amber-700 bg-amber-50 border border-amber-200 p-3 rounded text-sm">
+              {loginError}
+            </div>
           )}
           
           <button
             onClick={loginWithGoogle}
-            className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 transition"
+            disabled={isLoggingIn}
+            className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 transition disabled:opacity-50 cursor-pointer"
           >
-            <LogIn className="w-5 h-5" />
-            Sign in with Google
+            {isLoggingIn ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <span>Opening Google Sign-In...</span>
+              </>
+            ) : (
+              <>
+                <LogIn className="w-5 h-5" />
+                <span>Sign in with Google</span>
+              </>
+            )}
           </button>
 
           {user && (
             <button
               onClick={logout}
-              className="mt-4 text-sm text-gray-500 hover:text-gray-800"
+              className="mt-4 text-sm text-gray-500 hover:text-gray-800 block mx-auto cursor-pointer"
             >
               Sign out
             </button>
@@ -651,8 +1523,11 @@ export default function Admin() {
 
   const tabs = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
+    { name: 'Calendar & Pre-Notices', path: '/admin/calendar', icon: CalendarIcon },
+    { name: 'Gallery 📸', path: '/admin/gallery', icon: ImageIcon },
     { name: 'Notices', path: '/admin/notices', icon: FileText },
     { name: 'Staff', path: '/admin/staff', icon: Users },
+    { name: 'Birthdays 🎂', path: '/admin/birthdays', icon: Cake },
     { name: 'Admins', path: '/admin/admins', icon: Users },
     { name: 'Settings', path: '/admin/settings', icon: SettingsIcon },
   ];
@@ -699,8 +1574,11 @@ export default function Admin() {
       <main className="flex-1 p-8">
         <Routes>
           <Route path="/" element={<div className="bg-white p-6 rounded-lg shadow"><h3 className="text-2xl font-bold mb-4">Welcome to Admin Dashboard</h3><p>Select a tab from the sidebar to manage content.</p></div>} />
+          <Route path="/calendar" element={<CalendarEventsAdmin />} />
+          <Route path="/gallery" element={<GalleryAdmin />} />
           <Route path="/notices" element={<NoticesAdmin />} />
           <Route path="/staff" element={<StaffAdmin />} />
+          <Route path="/birthdays" element={<BirthdaysAdmin />} />
           <Route path="/admins" element={<AdminManagement />} />
           <Route path="/settings" element={<SettingsAdmin />} />
         </Routes>

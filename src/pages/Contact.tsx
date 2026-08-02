@@ -171,18 +171,25 @@ export default function Contact() {
                   </div>
                 </div>
 
-                <div className="flex items-start gap-4">
-                  <div className="bg-blue-50 p-3 rounded-full text-primary mt-1">
-                    <Mail className="w-6 h-6" />
+                <div className="flex items-start gap-4 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                  <div className="bg-blue-100 p-3 rounded-xl text-primary mt-0.5">
+                    <Mail className="w-5 h-5" />
                   </div>
-                  <div>
-                    <InlineEdit settingKey="contactEmailTitle" fallback="Email Address" className="font-semibold text-gray-900" as="h3" />
-                    <InlineEdit
-                      settingKey="email"
-                      fallback="vidhyajyotilamjung@gmail.com"
-                      as="p"
-                      className="text-gray-600 mt-1 block"
-                    />
+                  <div className="flex-1">
+                    <InlineEdit settingKey="contactEmailTitle" fallback="Official Email Address" className="font-bold text-gray-900 text-sm" as="h3" />
+                    <div className="flex items-center justify-between gap-2 mt-1">
+                      <a href="mailto:vidhyajyotilamjung@gmail.com" className="text-primary hover:underline text-sm font-semibold break-all">
+                        vidhyajyotilamjung@gmail.com
+                      </a>
+                      <button 
+                        type="button"
+                        onClick={() => navigator.clipboard.writeText('vidhyajyotilamjung@gmail.com')}
+                        className="text-xs bg-white hover:bg-gray-100 text-gray-700 px-2.5 py-1 rounded-md border border-gray-200 transition-colors font-medium flex-shrink-0"
+                        title="Copy email address"
+                      >
+                        Copy
+                      </button>
+                    </div>
                   </div>
                 </div>
 

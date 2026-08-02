@@ -3,6 +3,8 @@ import { Bell, ArrowRight } from 'lucide-react';
 import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 
+const DEFAULT_NOTICES: any[] = [];
+
 export default function News() {
   const [notices, setNotices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -15,7 +17,7 @@ export default function News() {
         const docs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setNotices(docs);
       } catch (e) {
-        handleFirestoreError(e, OperationType.GET, 'notices');
+        console.error('Error fetching notices:', e);
       } finally {
         setLoading(false);
       }
@@ -24,14 +26,6 @@ export default function News() {
   }, []);
 
   const categories = ["Academic", "Holiday", "Events", "Committee", "General"];
-
-  if (loading) {
-    return (
-      <div className="bg-light py-12 min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
 
   return (
     <div className="bg-light py-12 min-h-screen">

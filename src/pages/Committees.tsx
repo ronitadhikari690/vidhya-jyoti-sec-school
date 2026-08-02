@@ -3,6 +3,7 @@ import { Users, User as UserIcon, Upload, Trash2, Edit, Save, Plus, Database, Al
 import { collection, query, orderBy, getDocs, where, addDoc, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
+import { InlineEdit } from '../components/InlineEdit';
 
 function ImageUpload({ currentImageUrl, onUpload }: { currentImageUrl?: string, onUpload: (url: string) => void }) {
   const [uploading, setUploading] = useState(false);
@@ -254,14 +255,17 @@ export default function Committees() {
         )}
         {isAdmin && <ImageUpload currentImageUrl={member.imageUrl} onUpload={(url) => handleUpdateImage(member.id, url)} />}
       </div>
-      <div>
-        <div className="font-bold text-gray-900 np-text line-clamp-1">{member.name}</div>
-        <div className="text-xs text-primary font-medium">{member.role}</div>
-        {member.phone && (
-          <div className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
-            <span className="opacity-70">📞</span> {member.phone}
-          </div>
-        )}
+      <div className="flex-1 min-w-0">
+        <div className="font-bold text-gray-900 np-text line-clamp-1">
+          <InlineEdit settingKey={`cmte_name_${member.id}`} fallback={member.name} />
+        </div>
+        <div className="text-xs text-primary font-medium">
+          <InlineEdit settingKey={`cmte_role_${member.id}`} fallback={member.role} />
+        </div>
+        <div className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
+          <span className="opacity-70">📞</span> 
+          <InlineEdit settingKey={`cmte_phone_${member.id}`} fallback={member.phone || 'फोन नम्बर'} />
+        </div>
       </div>
     </div>
   );

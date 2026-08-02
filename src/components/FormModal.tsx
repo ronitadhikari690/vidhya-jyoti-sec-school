@@ -1,6 +1,9 @@
 import { useState, useRef } from 'react';
 import { X, Printer, Download, ArrowRight, Check, Sparkles, FileText, User, FileCheck, HelpCircle, Mail } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useSettings } from '../context/SettingsContext';
+// @ts-ignore
+import schoolLogo from '../assets/images/school_logo_1785677840176.jpg';
 
 interface FormModalProps {
   formType: 'leave' | 'admission' | 'scholarship' | null;
@@ -8,6 +11,7 @@ interface FormModalProps {
 }
 
 export default function FormModal({ formType, onClose }: FormModalProps) {
+  const { settings } = useSettings();
   if (!formType) return null;
 
   // Form State: Leave Application
@@ -53,8 +57,44 @@ export default function FormModal({ formType, onClose }: FormModalProps) {
 
   const [formSubmitted, setFormSubmitted] = useState(false);
 
-  const handlePrint = () => {
-    window.print();
+  const handleDownload = () => {
+    const printableArea = document.getElementById('printable-form-area');
+    if (!printableArea) return;
+
+    const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${getFormTitle()} - Vidhya Jyoti Secondary School</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @media print {
+      @page { size: A4 portrait; margin: 1.5cm; }
+      body { padding: 0 !important; }
+    }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f9fafb; color: #111827; padding: 2rem; }
+  </style>
+</head>
+<body className="bg-gray-50 flex justify-center py-8">
+  <div style="max-width: 800px; margin: 0 auto; background: white; padding: 2rem; border-radius: 1rem; border: 1px solid #e5e7eb; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+    ${printableArea.innerHTML}
+  </div>
+</body>
+</html>`;
+
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${formType}_application_${new Date().toISOString().split('T')[0]}.html`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setFormSubmitted(true);
+    setTimeout(() => setFormSubmitted(false), 4000);
   };
 
   const handleEmail = () => {
@@ -64,14 +104,82 @@ export default function FormModal({ formType, onClose }: FormModalProps) {
 
     if (formType === 'leave') {
       const duration = Math.max(1, Math.ceil((new Date(leaveData.endDate).getTime() - new Date(leaveData.startDate).getTime()) / 86400000) + 1);
-      emailSubject = `Leave Application Form - ${leaveData.studentName} (${leaveData.studentClass})`;
-      emailBody = `To,\nThe Principal,\nVidhya Jyoti Secondary School\nKhahare, Lamjung, Nepal\n\nSubject: Application for Leave (बिदाको लागि निवेदन)\n\nRespected Principal,\n\nI am writing to formally request leave of absence from classes for my ward, ${leaveData.studentName}, who is currently studying in ${leaveData.studentClass}, Roll Number ${leaveData.rollNo}.\n\nThe leave is requested for a period of ${duration} day(s), starting from ${leaveData.startDate} to ${leaveData.endDate} due to ${leaveData.reason.toLowerCase()}.\n\nDetailed Reason:\n"${leaveData.additionalInfo || 'N/A'}"\n\nI assure you that the student will take immediate steps to catch up with all classwork and lectures missed during this period. I request you to kindly grant approval for the leave.\n\nThank you for your consideration.\n\nSincerely,\nGuardian: ${leaveData.guardianName || '_______________________'}\nDate: ${new Date().toLocaleDateString()}`;
+      emailSubject = `Leave Application Form | ${leaveData.studentName} (${leaveData.studentClass})`;
+      emailBody = `To: The Principal, Vidhya Jyoti Secondary School
+Khahare, Lamjung, Nepal
+
+SUBJECT: Application for Leave of Absence (${leaveData.studentName})
+
+Respected Principal,
+
+Please accept this application for leave of absence for my ward, ${leaveData.studentName}, currently studying in ${leaveData.studentClass} (Roll No: ${leaveData.rollNo}).
+
+Leave Details:
+• Duration: ${duration} day(s)
+• Period: ${leaveData.startDate} to ${leaveData.endDate}
+• Reason: ${leaveData.reason}
+• Details: ${leaveData.additionalInfo || 'N/A'}
+
+The student will catch up on all missed lessons promptly.
+
+Sincerely,
+Guardian Name: ${leaveData.guardianName || 'N/A'}
+Date: ${new Date().toLocaleDateString()}`;
     } else if (formType === 'admission') {
-      emailSubject = `New Student Admission Form - ${admissionData.studentName} (${admissionData.appliedClass})`;
-      emailBody = `STUDENT ADMISSION REQUEST (भर्ना आवेदन फारम)\n=========================================\nAcademic Session: ${admissionData.academicYear}\nApplied for Class: ${admissionData.appliedClass}\n\n1. STUDENT DETAILS (विद्यार्थीको विवरण)\n-----------------------------------------\nFull Name (English): ${admissionData.studentName}\nFull Name (Nepali): ${admissionData.studentNameNepali}\nDate of Birth: ${admissionData.dob}\nGender: ${admissionData.gender}\nPermanent Address: ${admissionData.address}\n\n2. FAMILY DETAILS (पारिवारिक विवरण)\n-----------------------------------------\nFather's Name: ${admissionData.fatherName}\nMother's Name: ${admissionData.motherName}\nContact Phone: ${admissionData.contactNo}\n\n3. ACADEMIC HISTORY (शैक्षिक इतिहास)\n-----------------------------------------\nPrevious School Name: ${admissionData.prevSchool}\nMarks Secured / Grade: ${admissionData.prevGrade}\n\nDeclaration:\nWe hereby declare that all the details provided in this admission form are true, correct, and complete to the best of our knowledge. We agree to abide by all the rules, disciplines, and academic standards set forth by Vidhya Jyoti Secondary School.\n\nSubmitted by:\nStudent and Parent/Guardian\nDate: ${new Date().toLocaleDateString()}`;
+      emailSubject = `Student Admission Form | ${admissionData.studentName} (${admissionData.appliedClass})`;
+      emailBody = `VIDHYA JYOTI SECONDARY SCHOOL
+STUDENT ADMISSION APPLICATION
+=========================================
+
+ACADEMIC DETAILS:
+• Session: ${admissionData.academicYear}
+• Grade Applied: ${admissionData.appliedClass}
+
+STUDENT INFORMATION:
+• Full Name (EN): ${admissionData.studentName}
+• Full Name (NP): ${admissionData.studentNameNepali}
+• Date of Birth: ${admissionData.dob}
+• Gender: ${admissionData.gender}
+• Permanent Address: ${admissionData.address}
+
+FAMILY INFORMATION:
+• Father's Name: ${admissionData.fatherName}
+• Mother's Name: ${admissionData.motherName}
+• Primary Contact Phone: ${admissionData.contactNo}
+
+PREVIOUS ACADEMIC RECORD:
+• Previous School: ${admissionData.prevSchool}
+• Previous Grade/GPA: ${admissionData.prevGrade}
+
+DECLARATION:
+All details provided are true and accurate to the best of our knowledge.
+
+Submitted on: ${new Date().toLocaleDateString()}`;
     } else if (formType === 'scholarship') {
-      emailSubject = `Scholarship & Fee Waiver Application - ${scholarshipData.studentName} (${scholarshipData.studentClass})`;
-      emailBody = `SCHOLARSHIP & FEE WAIVER APPLICATION\n=========================================\nRequest Category: ${scholarshipData.scholarshipCategory}\n\n1. STUDENT PARTICULARS\n-----------------------------------------\nStudent Name: ${scholarshipData.studentName}\nClass: ${scholarshipData.studentClass}\nRoll Number: ${scholarshipData.rollNo}\n\n2. SOCIO-ECONOMIC INFORMATION\n-----------------------------------------\nGuardian Name: ${scholarshipData.guardianName}\nOccupation: ${scholarshipData.guardianOccupation}\nAnnual Income (NPR): Rs. ${scholarshipData.annualIncome}\n\n3. ACADEMIC PERFORMANCE\n-----------------------------------------\nPrevious GPA/Grade: ${scholarshipData.prevGPA}\n\n4. STATEMENT OF NEED / JUSTIFICATION\n-----------------------------------------\n"${scholarshipData.reason}"\n\nSubmitted by:\nApplicant and Parent/Guardian\nDate: ${new Date().toLocaleDateString()}`;
+      emailSubject = `Scholarship Application | ${scholarshipData.studentName} (${scholarshipData.studentClass})`;
+      emailBody = `VIDHYA JYOTI SECONDARY SCHOOL
+SCHOLARSHIP & FINANCIAL ASSISTANCE APPLICATION
+=========================================
+
+CATEGORY: ${scholarshipData.scholarshipCategory}
+
+STUDENT DETAILS:
+• Name: ${scholarshipData.studentName}
+• Class: ${scholarshipData.studentClass}
+• Roll Number: ${scholarshipData.rollNo}
+
+SOCIO-ECONOMIC DETAILS:
+• Guardian Name: ${scholarshipData.guardianName}
+• Occupation: ${scholarshipData.guardianOccupation}
+• Annual Family Income: Rs. ${scholarshipData.annualIncome}
+
+ACADEMIC PERFORMANCE:
+• Previous GPA/Grade: ${scholarshipData.prevGPA}
+
+STATEMENT OF NEED:
+"${scholarshipData.reason}"
+
+Submitted on: ${new Date().toLocaleDateString()}`;
     }
 
     const mailtoUrl = `mailto:${schoolEmail}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
@@ -510,27 +618,24 @@ export default function FormModal({ formType, onClose }: FormModalProps) {
               
               <div className="flex flex-col sm:flex-row gap-3">
                 <button
-                  onClick={() => {
-                    setFormSubmitted(true);
-                    setTimeout(() => setFormSubmitted(false), 4000);
-                  }}
-                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm font-bold py-2.5 px-4 rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  onClick={handleDownload}
+                  className="flex-1 bg-gray-900 hover:bg-black text-white text-sm font-bold py-2.5 px-4 rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                 >
                   {formSubmitted ? (
                     <>
-                      <Check className="w-4 h-4" /> Form Saved Offline!
+                      <Check className="w-4 h-4 text-green-400" /> Form Downloaded!
                     </>
                   ) : (
                     <>
-                      <FileCheck className="w-4 h-4" /> Save Copy Offline
+                      <Download className="w-4 h-4" /> Download Form (.html)
                     </>
                   )}
                 </button>
                 <button
-                  onClick={handlePrint}
-                  className="bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold text-sm py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm"
+                  onClick={() => window.print()}
+                  className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-bold text-sm py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm"
                 >
-                  <Printer className="w-4 h-4" /> Print Document
+                  <Printer className="w-4 h-4 text-blue-600" /> Print Document
                 </button>
               </div>
             </div>
@@ -547,10 +652,12 @@ export default function FormModal({ formType, onClose }: FormModalProps) {
               
               {/* Document Letterhead */}
               <div className="flex flex-col items-center text-center border-b-2 border-primary pb-5 mb-8">
-                {/* Official Crest / Logo Placeholder */}
-                <div className="w-16 h-16 rounded-full border-2 border-primary flex items-center justify-center text-primary font-bold text-lg mb-3 bg-blue-50/50">
-                  VJSS
-                </div>
+                {/* Official Crest / Logo */}
+                <img 
+                  src={settings?.school_logo_url || schoolLogo} 
+                  alt="Vidhya Jyoti Secondary School Logo" 
+                  className="w-20 h-20 object-contain mb-2 rounded-full border-2 border-primary p-0.5 bg-white shadow-sm"
+                />
                 <h1 className="text-2xl font-black text-gray-950 uppercase tracking-wide">
                   Vidhya Jyoti Secondary School
                 </h1>

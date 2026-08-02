@@ -104,5 +104,27 @@ service cloud.firestore {
                       && incoming().updatedAt == request.time;
        allow delete: if isAdmin() && isValidId(photoId);
     }
+
+    // Birthdays Collection
+    match /birthdays/{birthdayId} {
+      allow read: if true;
+      allow create: if isAdmin();
+      allow update: if isAdmin() || (
+        incoming().diff(existing()).affectedKeys().hasOnly(['wishesCount', 'comments'])
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Calendar Events & Pre-Notices
+    match /calendar_events/{eventId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Media & Event Gallery
+    match /gallery/{galleryId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
   }
 }

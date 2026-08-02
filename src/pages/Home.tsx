@@ -40,18 +40,18 @@ export default function Home() {
       </div>
 
       {/* Hero Section */}
-      <section className="relative bg-primary overflow-hidden">
+      <section className="relative bg-gray-950 overflow-hidden">
         <div className="absolute inset-0">
           <InlineImageEdit
             settingKey="heroImageUrl"
             fallbackUrl={heroBgImage}
-            className="w-full h-full object-cover opacity-20"
-            alt="School building"
+            className="w-full h-full object-cover opacity-90"
+            alt="School students"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-primary/90 to-transparent"></div>
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-black/30 to-black/20"></div>
         </div>
         
-        <div className="relative max-w-5xl mx-auto px-6 sm:px-10 lg:px-12 pt-16 pb-20 mt-12 mb-20 bg-white/5 backdrop-blur-md border border-white/10 rounded-3xl shadow-2xl">
+        <div className="relative w-full max-w-none px-6 sm:px-12 lg:px-20 py-16 sm:py-20 my-8 bg-black/25 backdrop-blur-[2px] border-y border-white/20 shadow-2xl">
           <div className="text-center">
             <p className="text-blue-200 font-semibold tracking-wider uppercase mb-4">{currentDate}</p>
             <h1 className="text-4xl md:text-6xl font-extrabold text-white mb-6 drop-shadow-lg np-text">

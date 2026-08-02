@@ -334,22 +334,26 @@ export default function StaffDirectory() {
                       {isAdmin && <ImageUpload currentImageUrl={member.imageUrl} onUpload={(url) => handleUpdateImage(member.id, url)} />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-lg font-bold text-gray-900 mb-0.5 np-text truncate">{member.name}</h3>
-                      <p className="text-sm text-primary font-medium mb-2">{member.role}</p>
+                      <h3 className="text-lg font-bold text-gray-900 mb-0.5 np-text truncate">
+                        <InlineEdit settingKey={`staff_name_${member.id}`} fallback={member.name} />
+                      </h3>
+                      <p className="text-sm text-primary font-medium mb-2">
+                        <InlineEdit settingKey={`staff_role_${member.id}`} fallback={member.role} />
+                      </p>
                       
                       <div className="space-y-1">
-                        {member.subject && (
-                          <div className="flex items-center gap-2 text-xs text-gray-500">
-                            <BookOpen className="w-3.5 h-3.5 text-gray-400" />
-                            <span className="truncate">{member.subject}</span>
-                          </div>
-                        )}
-                        {member.phone && (
-                          <div className="flex items-center gap-2 text-xs text-gray-500">
-                            <Phone className="w-3.5 h-3.5 text-gray-400" />
-                            <span>{member.phone}</span>
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <BookOpen className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                          <span className="truncate">
+                            <InlineEdit settingKey={`staff_subject_${member.id}`} fallback={member.subject || 'विषय / Subject'} />
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <Phone className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                          <span>
+                            <InlineEdit settingKey={`staff_phone_${member.id}`} fallback={member.phone || 'फोन नम्बर'} />
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -376,22 +380,26 @@ export default function StaffDirectory() {
                       {isAdmin && <ImageUpload currentImageUrl={member.imageUrl} onUpload={(url) => handleUpdateImage(member.id, url)} />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-lg font-bold text-gray-900 mb-0.5 np-text truncate">{member.name}</h3>
-                      <p className="text-sm text-primary font-medium mb-2">{member.role}</p>
+                      <h3 className="text-lg font-bold text-gray-900 mb-0.5 np-text truncate">
+                        <InlineEdit settingKey={`staff_name_${member.id}`} fallback={member.name} />
+                      </h3>
+                      <p className="text-sm text-primary font-medium mb-2">
+                        <InlineEdit settingKey={`staff_role_${member.id}`} fallback={member.role} />
+                      </p>
                       
                       <div className="space-y-1">
-                        {member.subject && (
-                          <div className="flex items-center gap-2 text-xs text-gray-500">
-                            <BookOpen className="w-3.5 h-3.5 text-gray-400" />
-                            <span className="truncate">{member.subject}</span>
-                          </div>
-                        )}
-                        {member.phone && (
-                          <div className="flex items-center gap-2 text-xs text-gray-500">
-                            <Phone className="w-3.5 h-3.5 text-gray-400" />
-                            <span>{member.phone}</span>
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <BookOpen className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                          <span className="truncate">
+                            <InlineEdit settingKey={`staff_subject_${member.id}`} fallback={member.subject || 'कार्यक्षेत्र / Duties'} />
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <Phone className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                          <span>
+                            <InlineEdit settingKey={`staff_phone_${member.id}`} fallback={member.phone || 'फोन नम्बर'} />
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>

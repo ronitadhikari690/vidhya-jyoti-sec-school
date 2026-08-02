@@ -1,7 +1,12 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, Search, GraduationCap, Globe } from 'lucide-react';
+import { Menu, X, Globe } from 'lucide-react';
 import { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
+import { InlineEdit } from './InlineEdit';
+import { InlineImageEdit } from './InlineImageEdit';
+import GlobalSearch from './GlobalSearch';
+// @ts-ignore
+import schoolLogo from '../assets/images/school_logo_1785677840176.jpg';
 
 export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -19,6 +24,8 @@ export default function Navbar() {
     { name: t('Responsibilities', 'जिम्मेवारी'), path: '/responsibilities' },
     { name: t('Parents', 'अभिभावक'), path: '/parents' },
     { name: t('Students', 'विद्यार्थी'), path: '/students' },
+    { name: t('Birthdays 🎂', 'जन्मदिन 🎂'), path: '/birthdays' },
+    { name: t('Gallery 📸', 'ग्यालरी 📸'), path: '/gallery' },
     { name: t('Contact', 'सम्पर्क'), path: '/contact' },
   ];
 
@@ -30,15 +37,26 @@ export default function Navbar() {
         <div className="flex justify-between h-20 items-center">
           {/* Logo & School Name */}
           <Link to="/" className="flex items-center gap-3 flex-shrink-0">
-            <div className="bg-white p-2 rounded-full hidden sm:block">
-              <GraduationCap className="w-8 h-8 text-primary" />
+            <div className="bg-white p-1 rounded-full shadow-sm border border-amber-300 overflow-hidden flex items-center justify-center">
+              <InlineImageEdit 
+                settingKey="school_logo_url"
+                fallbackUrl={schoolLogo}
+                alt="Vidya Jyoti School Logo" 
+                className="w-10 h-10 sm:w-12 sm:h-12 object-contain rounded-full"
+              />
             </div>
             <div>
               <h1 className="text-xl sm:text-2xl font-bold leading-tight flex items-center gap-2">
-                {t('Vidhya Jyoti Sec. School', 'विद्या ज्योति मा.वि.')}
+                <InlineEdit 
+                  settingKey="school_name_header" 
+                  fallback={t('Vidhya Jyoti Sec. School', 'विद्या ज्योति मा.वि.')} 
+                />
               </h1>
               <p className="text-xs sm:text-sm text-blue-200">
-                {t('Khahare, Lamjung', 'खहरे, लमजुङ')}
+                <InlineEdit 
+                  settingKey="address_short" 
+                  fallback={t('Khahare, Lamjung', 'खहरे, लमजुङ')} 
+                />
               </p>
             </div>
           </Link>
@@ -88,14 +106,9 @@ export default function Navbar() {
               </span>
             </button>
 
-            {/* Search */}
-            <div className="ml-2 flex items-center bg-blue-800 rounded-md px-2 py-1.5 focus-within:ring-2 ring-white">
-              <Search className="w-4 h-4 text-gray-300" />
-              <input
-                type="text"
-                placeholder={t("Search...", "खोज्नुहोस्...")}
-                className="bg-transparent border-none text-sm text-white focus:outline-none px-2 w-24 placeholder-gray-400 np-text"
-              />
+            {/* Global Search */}
+            <div className="ml-2">
+              <GlobalSearch />
             </div>
           </div>
 
@@ -138,15 +151,8 @@ export default function Navbar() {
                 {link.name}
               </Link>
             ))}
-            <div className="p-3">
-              <div className="flex items-center bg-blue-800 rounded-md px-3 py-2">
-                <Search className="w-5 h-5 text-gray-300" />
-                <input
-                  type="text"
-                  placeholder={t("Search...", "खोज्नुहोस्...")}
-                  className="bg-transparent border-none text-base text-white focus:outline-none px-2 w-full placeholder-gray-400 np-text"
-                />
-              </div>
+            <div className="p-3 border-t border-blue-800 mt-2">
+              <GlobalSearch isMobile={true} />
             </div>
           </div>
         </div>

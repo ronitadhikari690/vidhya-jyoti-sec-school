@@ -120,7 +120,9 @@ export default function TeacherResponsibilities() {
               प्रधानाध्यापक (Principal)
             </h2>
             <div className="bg-white/20 px-6 py-2 rounded-full">
-              <span className="text-xl font-bold text-white np-text">सूर्यबहादुर के.सी.</span>
+              <span className="text-xl font-bold text-white np-text">
+                <InlineEdit settingKey="principalName" fallback="सूर्यबहादुर के.सी." />
+              </span>
             </div>
           </div>
         </div>
@@ -133,21 +135,31 @@ export default function TeacherResponsibilities() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {responsibilities.map((resp, idx) => (
               <div key={idx} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col items-start hover:shadow-md transition-shadow group">
-                <div className="flex items-start gap-4 mb-4">
+                <div className="flex items-start gap-4 mb-4 w-full">
                   <div className="mt-1 flex-shrink-0 bg-blue-50 p-2 rounded-full group-hover:bg-primary transition-colors">
                     <CheckCircle2 className="w-6 h-6 text-primary group-hover:text-white transition-colors" />
                   </div>
-                  <h3 className="text-lg font-bold text-gray-900 np-text pt-1">{resp.title}</h3>
+                  <h3 className="text-lg font-bold text-gray-900 np-text pt-1 flex-1">
+                    <InlineEdit settingKey={`resp_title_${idx}`} fallback={resp.title} />
+                  </h3>
                 </div>
                 
                 <div className="w-full bg-gray-50 p-4 rounded-lg border border-gray-100 flex flex-col gap-2">
-                  <div className="flex justify-between items-center border-b border-gray-200 pb-2">
-                    <span className="text-sm font-semibold text-gray-600 np-text">{resp.coordinatorRole}:</span>
-                    <span className="text-md font-bold text-gray-900 np-text">{resp.coordinator}</span>
+                  <div className="flex justify-between items-center border-b border-gray-200 pb-2 gap-2">
+                    <span className="text-sm font-semibold text-gray-600 np-text flex-shrink-0">
+                      <InlineEdit settingKey={`resp_crole_${idx}`} fallback={resp.coordinatorRole} />:
+                    </span>
+                    <span className="text-md font-bold text-gray-900 np-text text-right">
+                      <InlineEdit settingKey={`resp_coord_${idx}`} fallback={resp.coordinator} />
+                    </span>
                   </div>
-                  <div className="flex justify-between items-center pt-1">
-                    <span className="text-sm font-semibold text-gray-600 np-text">सह-संयोजक:</span>
-                    <span className="text-md font-bold text-gray-900 np-text">{resp.coCoordinator}</span>
+                  <div className="flex justify-between items-center pt-1 gap-2">
+                    <span className="text-sm font-semibold text-gray-600 np-text flex-shrink-0">
+                      <InlineEdit settingKey={`resp_cocrole_${idx}`} fallback="सह-संयोजक" />:
+                    </span>
+                    <span className="text-md font-bold text-gray-900 np-text text-right">
+                      <InlineEdit settingKey={`resp_cocoord_${idx}`} fallback={resp.coCoordinator} />
+                    </span>
                   </div>
                 </div>
               </div>
@@ -158,9 +170,14 @@ export default function TeacherResponsibilities() {
             <div className="bg-amber-100 p-3 rounded-full flex-shrink-0">
               <Info className="w-6 h-6 text-amber-600" />
             </div>
-            <p className="np-text text-lg font-medium text-center sm:text-left">
-              नोट: प्रत्येक शुक्रबार Friday For Future सँग सम्बन्धित क्रियाकलापहरु सञ्चालन गरिने छ।
-            </p>
+            <div className="np-text text-lg font-medium text-center sm:text-left flex-1">
+              <InlineEdit 
+                settingKey="friday_note" 
+                fallback="नोट: प्रत्येक शुक्रबार Friday For Future सँग सम्बन्धित क्रियाकलापहरु सञ्चालन गरिने छ।" 
+                multiline={true} 
+                as="div"
+              />
+            </div>
           </div>
         </div>
 

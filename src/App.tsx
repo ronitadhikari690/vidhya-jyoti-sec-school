@@ -16,6 +16,8 @@ import TeacherResponsibilities from './pages/TeacherResponsibilities';
 import Parents from './pages/Parents';
 import Students from './pages/Students';
 import Contact from './pages/Contact';
+import Birthdays from './pages/Birthdays';
+import Gallery from './pages/Gallery';
 import Admin from './pages/Admin';
 import { LanguageProvider } from './context/LanguageContext';
 import { AuthProvider } from './context/AuthContext';
@@ -36,6 +38,8 @@ const router = createBrowserRouter([
       { path: 'responsibilities', element: <TeacherResponsibilities /> },
       { path: 'parents', element: <Parents /> },
       { path: 'students', element: <Students /> },
+      { path: 'birthdays', element: <Birthdays /> },
+      { path: 'gallery', element: <Gallery /> },
       { path: 'contact', element: <Contact /> },
       { path: 'admin/*', element: <Admin /> },
     ],
