@@ -63,6 +63,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         e?.message?.includes('popup-closed-by-user')
       ) {
         console.warn('Google sign-in popup was closed or cancelled by user.');
+      } else if (e?.code === 'auth/unauthorized-domain' || e?.message?.includes('unauthorized-domain') || e?.message?.includes('authorized domain')) {
+        setLoginError(`Domain Unauthorized: "${window.location.hostname}" is not in Firebase's Authorized Domains. To fix, add "${window.location.hostname}" in Firebase Console > Authentication > Settings > Authorized domains.`);
       } else {
         console.error('Google sign-in error:', e);
         setLoginError(e?.message || 'Failed to sign in with Google.');

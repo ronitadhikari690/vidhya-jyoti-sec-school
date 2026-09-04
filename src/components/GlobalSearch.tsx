@@ -19,6 +19,8 @@ const STATIC_PAGES: SearchResultItem[] = [
   { id: 'p-about', title: 'About Us', subtitle: 'School history, principal message, and mission', category: 'Page', path: '/about', icon: BookOpen },
   { id: 'p-academics', title: 'Academics & Courses', subtitle: 'Curriculum, classes, and educational programs', category: 'Page', path: '/academics', icon: BookOpen },
   { id: 'p-calendar', title: 'Academic Calendar', subtitle: 'Holidays, exam schedules, and school events', category: 'Page', path: '/calendar', icon: Calendar },
+  { id: 'p-downloads', title: 'Download Center 📁', subtitle: 'Exam routines, syllabi, guidelines, and PDF resources', category: 'Page', path: '/downloads', icon: FileText },
+  { id: 'p-charter', title: 'Citizen Charter (नागरिक बडापत्र)', subtitle: 'Service turnaround times, requirements, and official commitments', category: 'Page', path: '/charter', icon: BookOpen },
   { id: 'p-news', title: 'News & Notices', subtitle: 'Latest announcements, result updates, and press', category: 'Page', path: '/news', icon: Newspaper },
   { id: 'p-committees', title: 'Committees & Management', subtitle: 'School management, SMC, and PTA details', category: 'Page', path: '/committees', icon: User },
   { id: 'p-staff', title: 'Staff Directory', subtitle: 'Teachers, administration, and support staff', category: 'Page', path: '/staff', icon: User },

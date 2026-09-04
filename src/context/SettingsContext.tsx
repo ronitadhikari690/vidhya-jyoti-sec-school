@@ -31,18 +31,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     }
     try {
       const docRef = doc(db, 'settings', 'general');
-      await updateDoc(docRef, { [key]: valToSave });
+      await setDoc(docRef, { [key]: valToSave }, { merge: true });
     } catch (e: any) {
-      if (e.code === 'not-found') {
-        try {
-          const docRef = doc(db, 'settings', 'general');
-          await setDoc(docRef, { [key]: valToSave });
-        } catch (setErr) {
-          handleFirestoreError(setErr, OperationType.WRITE, 'settings/general');
-        }
-      } else {
-        handleFirestoreError(e, OperationType.UPDATE, 'settings/general');
-      }
+      console.error('Error updating setting:', key, e);
+      handleFirestoreError(e, OperationType.UPDATE, 'settings/general');
     }
   };
 

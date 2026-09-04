@@ -18,6 +18,8 @@ import Students from './pages/Students';
 import Contact from './pages/Contact';
 import Birthdays from './pages/Birthdays';
 import Gallery from './pages/Gallery';
+import Downloads from './pages/Downloads';
+import CitizenCharter from './pages/CitizenCharter';
 import Admin from './pages/Admin';
 import { LanguageProvider } from './context/LanguageContext';
 import { AuthProvider } from './context/AuthContext';
@@ -33,6 +35,8 @@ const router = createBrowserRouter([
       { path: 'academics', element: <Academics /> },
       { path: 'calendar', element: <Calendar /> },
       { path: 'news', element: <News /> },
+      { path: 'downloads', element: <Downloads /> },
+      { path: 'charter', element: <CitizenCharter /> },
       { path: 'committees', element: <Committees /> },
       { path: 'staff', element: <StaffDirectory /> },
       { path: 'responsibilities', element: <TeacherResponsibilities /> },

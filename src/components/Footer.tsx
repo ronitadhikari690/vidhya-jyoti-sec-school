@@ -73,6 +73,8 @@ export default function Footer() {
               <li><Link to="/about" className="hover:text-accent transition-colors np-text">{t('About Us', 'हाम्रो बारेमा')}</Link></li>
               <li><Link to="/academics" className="hover:text-accent transition-colors np-text">{t('Academics', 'शैक्षिक')}</Link></li>
               <li><Link to="/calendar" className="hover:text-accent transition-colors np-text">{t('School Calendar', 'विद्यालय क्यालेन्डर')}</Link></li>
+              <li><Link to="/downloads" className="hover:text-accent transition-colors np-text">{t('Download Center', 'डाउनलोड केन्द्र')}</Link></li>
+              <li><Link to="/charter" className="hover:text-accent transition-colors np-text">{t('Citizen Charter', 'नागरिक बडापत्र')}</Link></li>
               <li><Link to="/staff" className="hover:text-accent transition-colors np-text">{t('Staff Directory', 'कर्मचारी विवरण')}</Link></li>
               <li><Link to="/committees" className="hover:text-accent transition-colors np-text">{t('Committees', 'समितिहरु')}</Link></li>
               <li><Link to="/news" className="hover:text-accent transition-colors np-text">{t('News & Notices', 'समाचार र सूचना')}</Link></li>

@@ -1,13 +1,71 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LogIn, LogOut, LayoutDashboard, FileText, Users, Settings as SettingsIcon, Save, Plus, Trash2, Edit, X, Upload, Cake, Gift, Calendar as CalendarIcon, Image as ImageIcon, Bell } from 'lucide-react';
+import { LogIn, LogOut, LayoutDashboard, FileText, Users, Settings as SettingsIcon, Save, Plus, Trash2, Edit, X, Upload, Cake, Gift, Calendar as CalendarIcon, Image as ImageIcon, Bell, FolderDown, Link as LinkIcon, Download, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { doc, getDoc, setDoc, collection, getDocs, addDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { compressImage } from '../utils/imageCompressor';
 
-function ImageUpload({ onUpload, label, currentImageUrl }: { onUpload: (url: string) => void, label: string, currentImageUrl?: string }) {
+function ConfirmDialog({
+  isOpen,
+  title,
+  message,
+  onConfirm,
+  onCancel,
+  confirmText = "Delete",
+  confirmColor = "bg-red-600 hover:bg-red-700"
+}: {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  confirmText?: string;
+  confirmColor?: string;
+}) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-gray-100 animate-in fade-in zoom-in-95 duration-150 text-left">
+        <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4">
+          <Trash2 className="w-6 h-6" />
+        </div>
+        <h3 className="text-lg font-bold text-gray-900 mb-1">{title}</h3>
+        <p className="text-sm text-gray-500 mb-6">{message}</p>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="w-1/2 py-2.5 px-4 rounded-xl border border-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className={`w-1/2 py-2.5 px-4 rounded-xl text-white font-bold text-sm shadow-md transition-colors ${confirmColor}`}
+          >
+            {confirmText}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ImageUpload({
+  onUpload,
+  label,
+  currentImageUrl
+}: {
+  onUpload: (url: string) => void;
+  label: string;
+  currentImageUrl?: string;
+}) {
   const [uploading, setUploading] = useState(false);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [customUrl, setCustomUrl] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -19,49 +77,103 @@ function ImageUpload({ onUpload, label, currentImageUrl }: { onUpload: (url: str
       onUpload(compressed);
     } catch (err) {
       console.error('Failed to compress upload', err);
+      alert('Failed to process image. Please try another image.');
     } finally {
       setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleApplyUrl = () => {
+    if (customUrl.trim()) {
+      onUpload(customUrl.trim());
+      setShowUrlInput(false);
+      setCustomUrl('');
     }
   };
 
   return (
     <div className="space-y-2">
-      <label className="block text-sm font-medium text-gray-700">{label}</label>
-      <div className="flex items-center gap-4">
-        {currentImageUrl && (
-          <div className="relative w-16 h-16 group">
-            <img src={currentImageUrl} alt="Preview" className="w-16 h-16 object-cover rounded-lg border border-gray-200" />
-            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
-              <span className="text-[10px] text-white font-bold">New</span>
-            </div>
-          </div>
-        )}
-        <div className="flex-1">
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleFileChange}
-            className="hidden"
-            id={`file-upload-${label.replace(/\s+/g, '-').toLowerCase()}`}
-          />
-          <label
-            htmlFor={`file-upload-${label.replace(/\s+/g, '-').toLowerCase()}`}
-            className="flex items-center justify-center gap-2 border-2 border-dashed border-gray-200 rounded-xl p-3 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-all group"
-          >
-            {uploading ? (
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                <span className="text-sm text-blue-600 font-medium">Processing...</span>
-              </div>
-            ) : (
-              <>
-                <Upload className="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition-colors" />
-                <span className="text-sm text-gray-500 group-hover:text-blue-600 transition-colors">Select from Device</span>
-              </>
-            )}
-          </label>
-        </div>
+      <div className="flex items-center justify-between">
+        <label className="block text-sm font-medium text-gray-700">{label}</label>
+        <button
+          type="button"
+          onClick={() => setShowUrlInput(!showUrlInput)}
+          className="text-xs text-blue-600 hover:underline font-semibold"
+        >
+          {showUrlInput ? '« Back to File Upload' : '🔗 Or Paste Image URL'}
+        </button>
       </div>
+
+      {showUrlInput ? (
+        <div className="flex gap-2">
+          <input
+            type="url"
+            value={customUrl}
+            onChange={(e) => setCustomUrl(e.target.value)}
+            placeholder="https://images.unsplash.com/..."
+            className="flex-1 border p-2 text-xs rounded-lg focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            type="button"
+            onClick={handleApplyUrl}
+            className="bg-blue-600 text-white px-3 py-2 text-xs font-bold rounded-lg hover:bg-blue-700"
+          >
+            Apply URL
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-4">
+          {currentImageUrl ? (
+            <div className="relative w-16 h-16 shrink-0 group">
+              <img
+                src={currentImageUrl}
+                alt="Preview"
+                className="w-16 h-16 object-cover rounded-xl border border-gray-200 shadow-sm"
+              />
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUpload('');
+                }}
+                className="absolute -top-1.5 -right-1.5 bg-red-500 hover:bg-red-600 text-white p-0.5 rounded-full shadow"
+                title="Remove Image"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : null}
+          <div className="flex-1">
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 hover:border-blue-500 bg-gray-50 hover:bg-blue-50/50 rounded-xl p-3 cursor-pointer transition-all group"
+            >
+              {uploading ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-xs text-blue-600 font-bold">Compressing Image...</span>
+                </div>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4 text-gray-500 group-hover:text-blue-600 transition-colors" />
+                  <span className="text-xs text-gray-600 group-hover:text-blue-600 font-semibold transition-colors">
+                    {currentImageUrl ? 'Change / Replace Image' : 'Select Image from Device'}
+                  </span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -71,6 +183,7 @@ function NoticesAdmin() {
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [editingNotice, setEditingNotice] = useState<any>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -113,13 +226,18 @@ function NoticesAdmin() {
     setIsSidebarOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this notice?')) return;
+  const confirmDelete = async () => {
+    if (!deleteTargetId) return;
     try {
-      await deleteDoc(doc(db, 'notices', id));
+      await deleteDoc(doc(db, 'notices', deleteTargetId));
+      setDeleteTargetId(null);
+      if (editingNotice && editingNotice.id === deleteTargetId) {
+        setIsSidebarOpen(false);
+        setEditingNotice(null);
+      }
       loadNotices();
     } catch (e) {
-      handleFirestoreError(e, OperationType.DELETE, `notices/${id}`);
+      handleFirestoreError(e, OperationType.DELETE, `notices/${deleteTargetId}`);
     }
   };
 
@@ -156,14 +274,25 @@ function NoticesAdmin() {
     }
   };
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <div>Loading notices...</div>;
 
   return (
     <div className="relative">
       <div className="flex justify-between items-center mb-6">
         <h3 className="text-2xl font-bold text-gray-800">Notices Management</h3>
         <button 
-          onClick={() => { setEditingNotice(null); setIsSidebarOpen(true); }}
+          onClick={() => { 
+            setEditingNotice(null); 
+            setFormData({
+              title: '',
+              excerpt: '',
+              content: '',
+              imageUrl: '',
+              date: new Date().toISOString().split('T')[0],
+              category: 'General'
+            });
+            setIsSidebarOpen(true); 
+          }}
           className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
         >
           <Plus className="w-5 h-5" /> Add Notice
@@ -180,11 +309,20 @@ function NoticesAdmin() {
             </div>
             <div className="flex gap-2">
               <button onClick={() => handleEdit(notice)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-full transition"><Edit className="w-5 h-5" /></button>
-              <button onClick={() => handleDelete(notice.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-full transition"><Trash2 className="w-5 h-5" /></button>
+              <button onClick={() => setDeleteTargetId(notice.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-full transition"><Trash2 className="w-5 h-5" /></button>
             </div>
           </div>
         ))}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmDialog
+        isOpen={deleteTargetId !== null}
+        title="Delete Notice"
+        message="Are you sure you want to permanently delete this notice? This action cannot be undone."
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTargetId(null)}
+      />
 
       {isSidebarOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex justify-end">
@@ -218,10 +356,6 @@ function NoticesAdmin() {
                   currentImageUrl={formData.imageUrl} 
                   onUpload={(url) => setFormData({...formData, imageUrl: url})} 
                 />
-                <div className="mt-2">
-                  <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Or Paste Image URL</label>
-                  <input type="text" value={formData.imageUrl} onChange={e => setFormData({...formData, imageUrl: e.target.value})} className="w-full border p-2 rounded-md text-sm focus:ring-2 focus:ring-blue-500" placeholder="https://images.unsplash.com/..." />
-                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Full Content (Optional)</label>
@@ -233,11 +367,7 @@ function NoticesAdmin() {
               {editingNotice && (
                 <button 
                   type="button" 
-                  onClick={() => {
-                    handleDelete(editingNotice.id);
-                    setIsSidebarOpen(false);
-                    setEditingNotice(null);
-                  }}
+                  onClick={() => setDeleteTargetId(editingNotice.id)}
                   className="w-full bg-red-50 text-red-600 py-2.5 rounded-lg font-bold hover:bg-red-100 border border-red-200 transition flex items-center justify-center gap-2 mt-2"
                 >
                   <Trash2 className="w-4 h-4" /> Delete This Notice
@@ -256,6 +386,7 @@ function StaffAdmin() {
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<any>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -285,10 +416,19 @@ function StaffAdmin() {
     setIsSidebarOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this staff member?')) return;
-    try { await deleteDoc(doc(db, 'staff', id)); loadStaff(); }
-    catch (e) { handleFirestoreError(e, OperationType.DELETE, `staff/${id}`); }
+  const confirmDelete = async () => {
+    if (!deleteTargetId) return;
+    try {
+      await deleteDoc(doc(db, 'staff', deleteTargetId));
+      setDeleteTargetId(null);
+      if (editingStaff && editingStaff.id === deleteTargetId) {
+        setIsSidebarOpen(false);
+        setEditingStaff(null);
+      }
+      loadStaff();
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, `staff/${deleteTargetId}`);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -310,7 +450,7 @@ function StaffAdmin() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h3 className="text-2xl font-bold text-gray-800">Staff Management</h3>
-        <button onClick={() => { setEditingStaff(null); setIsSidebarOpen(true); }} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
+        <button onClick={() => { setEditingStaff(null); setFormData({ name: '', role: '', phone: '', subject: '', imageUrl: '', category: 'Teaching' }); setIsSidebarOpen(true); }} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
           <Plus className="w-5 h-5" /> Add Staff Member
         </button>
       </div>
@@ -320,7 +460,7 @@ function StaffAdmin() {
           <div key={member.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 relative group">
             <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button onClick={() => handleEdit(member)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-full"><Edit className="w-4 h-4" /></button>
-              <button onClick={() => handleDelete(member.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-full"><Trash2 className="w-4 h-4" /></button>
+              <button onClick={() => setDeleteTargetId(member.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-full"><Trash2 className="w-4 h-4" /></button>
             </div>
             <div className="text-xs font-bold text-primary uppercase mb-2">{member.category}</div>
             <h4 className="font-bold text-lg text-gray-900">{member.name}</h4>
@@ -330,6 +470,15 @@ function StaffAdmin() {
           </div>
         ))}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmDialog
+        isOpen={deleteTargetId !== null}
+        title="Delete Staff Member"
+        message="Are you sure you want to remove this staff member from the directory?"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTargetId(null)}
+      />
 
       {isSidebarOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex justify-end">
@@ -367,10 +516,6 @@ function StaffAdmin() {
                   currentImageUrl={formData.imageUrl} 
                   onUpload={(url) => setFormData({...formData, imageUrl: url})} 
                 />
-                <div className="mt-2">
-                  <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Or Paste Avatar URL</label>
-                  <input type="text" value={formData.imageUrl} onChange={e => setFormData({...formData, imageUrl: e.target.value})} className="w-full border p-2 rounded-md text-sm focus:ring-2 focus:ring-blue-500" placeholder="https://..." />
-                </div>
               </div>
               <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition">
                 {editingStaff ? 'Update Staff Member' : 'Add Staff Member'}
@@ -389,6 +534,7 @@ function BirthdaysAdmin() {
   const [submitting, setSubmitting] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -443,7 +589,6 @@ function BirthdaysAdmin() {
         });
       }
 
-      alert('Birthday entry saved successfully! 🎉');
       setFormData({
         name: '',
         category: 'Student (Boy)',
@@ -478,14 +623,18 @@ function BirthdaysAdmin() {
     setIsSidebarOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this birthday record?')) {
-      try {
-        await deleteDoc(doc(db, 'birthdays', id));
-        loadBirthdays();
-      } catch (e) {
-        handleFirestoreError(e, OperationType.DELETE, 'birthdays');
+  const confirmDelete = async () => {
+    if (!deleteTargetId) return;
+    try {
+      await deleteDoc(doc(db, 'birthdays', deleteTargetId));
+      setDeleteTargetId(null);
+      if (editingItem && editingItem.id === deleteTargetId) {
+        setIsSidebarOpen(false);
+        setEditingItem(null);
       }
+      loadBirthdays();
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, 'birthdays');
     }
   };
 
@@ -556,7 +705,7 @@ function BirthdaysAdmin() {
                   <Edit className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => handleDelete(b.id)}
+                  onClick={() => setDeleteTargetId(b.id)}
                   className="p-1.5 text-red-600 hover:bg-red-50 rounded"
                   title="Delete"
                 >
@@ -572,6 +721,15 @@ function BirthdaysAdmin() {
           )}
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmDialog
+        isOpen={deleteTargetId !== null}
+        title="Delete Birthday Record"
+        message="Are you sure you want to remove this birthday record?"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTargetId(null)}
+      />
 
       {/* Slide-over Form Sidebar */}
       {isSidebarOpen && (
@@ -667,6 +825,16 @@ function BirthdaysAdmin() {
                   {submitting ? 'Saving...' : 'Save Entry'}
                 </button>
               </div>
+
+              {editingItem && (
+                <button
+                  type="button"
+                  onClick={() => setDeleteTargetId(editingItem.id)}
+                  className="w-full bg-red-50 text-red-600 py-2.5 rounded-lg font-bold hover:bg-red-100 border border-red-200 transition flex items-center justify-center gap-2 mt-2"
+                >
+                  <Trash2 className="w-4 h-4" /> Delete This Birthday Record
+                </button>
+              )}
             </form>
           </div>
         </div>
@@ -681,6 +849,7 @@ function CalendarEventsAdmin() {
   const [submitting, setSubmitting] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -738,7 +907,6 @@ function CalendarEventsAdmin() {
       setEditingItem(null);
       setIsSidebarOpen(false);
       loadEvents();
-      alert('Calendar Event / Pre-Notice saved successfully! 🎉');
     } catch (e) {
       handleFirestoreError(e, editingItem ? OperationType.UPDATE : OperationType.WRITE, 'calendar_events');
     } finally {
@@ -758,14 +926,18 @@ function CalendarEventsAdmin() {
     setIsSidebarOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Delete this calendar item/pre-notice?')) {
-      try {
-        await deleteDoc(doc(db, 'calendar_events', id));
-        loadEvents();
-      } catch (e) {
-        handleFirestoreError(e, OperationType.DELETE, 'calendar_events');
+  const confirmDelete = async () => {
+    if (!deleteTargetId) return;
+    try {
+      await deleteDoc(doc(db, 'calendar_events', deleteTargetId));
+      setDeleteTargetId(null);
+      if (editingItem && editingItem.id === deleteTargetId) {
+        setIsSidebarOpen(false);
+        setEditingItem(null);
       }
+      loadEvents();
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, 'calendar_events');
     }
   };
 
@@ -817,7 +989,7 @@ function CalendarEventsAdmin() {
                 <button onClick={() => handleEdit(ev)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="Edit">
                   <Edit className="w-4 h-4" />
                 </button>
-                <button onClick={() => handleDelete(ev.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Delete">
+                <button onClick={() => setDeleteTargetId(ev.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Delete">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -830,6 +1002,15 @@ function CalendarEventsAdmin() {
           )}
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmDialog
+        isOpen={deleteTargetId !== null}
+        title="Delete Calendar Item"
+        message="Are you sure you want to remove this calendar / pre-notice entry?"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTargetId(null)}
+      />
 
       {/* Slide-over Form Sidebar */}
       {isSidebarOpen && (
@@ -923,6 +1104,360 @@ function CalendarEventsAdmin() {
                   {submitting ? 'Saving...' : 'Save Entry'}
                 </button>
               </div>
+
+              {editingItem && (
+                <button
+                  type="button"
+                  onClick={() => setDeleteTargetId(editingItem.id)}
+                  className="w-full bg-red-50 text-red-600 py-2.5 rounded-lg font-bold hover:bg-red-100 border border-red-200 transition flex items-center justify-center gap-2 mt-2"
+                >
+                  <Trash2 className="w-4 h-4" /> Delete This Calendar Entry
+                </button>
+              )}
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DownloadsAdmin() {
+  const [downloads, setDownloads] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<any>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+
+  const [formData, setFormData] = useState({
+    title: '',
+    titleNp: '',
+    category: 'routines',
+    fileUrl: '',
+    fileType: 'PDF',
+    fileSize: '1.2 MB',
+    publishDate: new Date().toISOString().split('T')[0],
+    description: '',
+    descriptionNp: ''
+  });
+
+  const categories = [
+    { id: 'routines', label: 'Exam Routines (परीक्षा तालिका)' },
+    { id: 'syllabus', label: 'Syllabus & Questions (पाठ्यक्रम र प्रश्नपत्र)' },
+    { id: 'forms', label: 'Application Forms (आवेदन फारमहरू)' },
+    { id: 'reports', label: 'Calendar & Reports (क्यालेन्डर तथा प्रतिवेदन)' },
+    { id: 'general', label: 'Guidelines & Rules (आचारसंहिता र निर्देशिका)' },
+  ];
+
+  useEffect(() => {
+    loadDownloads();
+  }, []);
+
+  async function loadDownloads() {
+    try {
+      const q = query(collection(db, 'downloads'), orderBy('publishDate', 'desc'));
+      const querySnapshot = await getDocs(q);
+      const docs = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      setDownloads(docs);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.GET, 'downloads');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.title.trim() || !formData.fileUrl.trim()) return;
+    setSubmitting(true);
+    try {
+      const payload = {
+        ...formData,
+        updatedAt: serverTimestamp()
+      };
+
+      if (editingItem) {
+        await updateDoc(doc(db, 'downloads', editingItem.id), payload);
+      } else {
+        await addDoc(collection(db, 'downloads'), payload);
+      }
+      setIsSidebarOpen(false);
+      setEditingItem(null);
+      loadDownloads();
+    } catch (e) {
+      handleFirestoreError(e, editingItem ? OperationType.UPDATE : OperationType.CREATE, 'downloads');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEdit = (item: any) => {
+    setEditingItem(item);
+    setFormData({
+      title: item.title || '',
+      titleNp: item.titleNp || '',
+      category: item.category || 'routines',
+      fileUrl: item.fileUrl || '',
+      fileType: item.fileType || 'PDF',
+      fileSize: item.fileSize || '1.2 MB',
+      publishDate: item.publishDate || new Date().toISOString().split('T')[0],
+      description: item.description || '',
+      descriptionNp: item.descriptionNp || ''
+    });
+    setIsSidebarOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTargetId) return;
+    try {
+      await deleteDoc(doc(db, 'downloads', deleteTargetId));
+      setDeleteTargetId(null);
+      if (editingItem && editingItem.id === deleteTargetId) {
+        setIsSidebarOpen(false);
+        setEditingItem(null);
+      }
+      loadDownloads();
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, 'downloads');
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold flex items-center gap-2">
+          <FolderDown className="w-6 h-6 text-primary" />
+          <span>Manage Download Center (डाउनलोड सामग्री व्यवस्थापन)</span>
+        </h2>
+        <button
+          onClick={() => {
+            setEditingItem(null);
+            setFormData({
+              title: '',
+              titleNp: '',
+              category: 'routines',
+              fileUrl: '',
+              fileType: 'PDF',
+              fileSize: '1.2 MB',
+              publishDate: new Date().toISOString().split('T')[0],
+              description: '',
+              descriptionNp: ''
+            });
+            setIsSidebarOpen(true);
+          }}
+          className="bg-primary text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-primary-dark transition-colors"
+        >
+          <Plus className="w-5 h-5" />
+          <span>Add Download Item</span>
+        </button>
+      </div>
+
+      {loading ? (
+        <p className="text-gray-500">Loading downloads...</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {downloads.map((item) => (
+            <div key={item.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-between">
+              <div>
+                <div className="flex justify-between items-start mb-2">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 uppercase">
+                    {item.category}
+                  </span>
+                  <span className="text-xs text-gray-400 font-semibold">{item.fileType} • {item.fileSize}</span>
+                </div>
+                <h3 className="font-bold text-gray-900 mb-1 leading-snug">{item.title}</h3>
+                {item.titleNp && <p className="text-xs text-gray-500 mb-2">{item.titleNp}</p>}
+                <p className="text-xs text-gray-400 mb-2">📅 Published: {item.publishDate}</p>
+                {item.description && <p className="text-xs text-gray-600 bg-gray-50 p-2 rounded line-clamp-2">{item.description}</p>}
+              </div>
+
+              <div className="flex items-center justify-between pt-3 border-t border-gray-100 mt-4">
+                <a
+                  href={item.fileUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  View File Link
+                </a>
+                <div className="flex gap-2">
+                  <button onClick={() => handleEdit(item)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="Edit">
+                    <Edit className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => setDeleteTargetId(item.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Delete">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+          {downloads.length === 0 && (
+            <div className="col-span-full text-center py-12 bg-white rounded-xl border border-gray-200 text-gray-500">
+              No download records created in Firestore yet. Click "Add Download Item" above. Default curated documents are shown to users until custom items are added.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmDialog
+        isOpen={deleteTargetId !== null}
+        title="Delete Download Document"
+        message="Are you sure you want to delete this downloadable document?"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTargetId(null)}
+      />
+
+      {/* Slide-over Form Sidebar */}
+      {isSidebarOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-end">
+          <div className="bg-white w-full max-w-lg h-full p-6 overflow-y-auto shadow-2xl animate-in slide-in-from-right duration-200">
+            <div className="flex justify-between items-center mb-6 pb-3 border-b">
+              <h3 className="text-xl font-bold">
+                {editingItem ? 'Edit Download Document' : 'Add Download Document'}
+              </h3>
+              <button onClick={() => setIsSidebarOpen(false)} className="text-gray-500 hover:text-gray-700">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Document Title (English) *</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  placeholder="e.g. First Term Exam Routine 2081"
+                  className="w-full border rounded-lg p-2.5 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Document Title (Nepali)</label>
+                <input
+                  type="text"
+                  value={formData.titleNp}
+                  onChange={(e) => setFormData({ ...formData, titleNp: e.target.value })}
+                  placeholder="e.g. प्रथम त्रैमासिक परीक्षा तालिका २०८१"
+                  className="w-full border rounded-lg p-2.5 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+                <select
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value as any })}
+                  className="w-full border rounded-lg p-2.5 text-sm"
+                >
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">File / Cloud URL (Google Drive, Dropbox, PDF link) *</label>
+                <input
+                  type="url"
+                  required
+                  value={formData.fileUrl}
+                  onChange={(e) => setFormData({ ...formData, fileUrl: e.target.value })}
+                  placeholder="https://drive.google.com/... or direct PDF link"
+                  className="w-full border rounded-lg p-2.5 text-sm"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">File Format</label>
+                  <select
+                    value={formData.fileType}
+                    onChange={(e) => setFormData({ ...formData, fileType: e.target.value })}
+                    className="w-full border rounded-lg p-2.5 text-sm"
+                  >
+                    <option value="PDF">PDF Document</option>
+                    <option value="DOCX">Word Document (.docx)</option>
+                    <option value="XLSX">Excel Spreadsheet (.xlsx)</option>
+                    <option value="ZIP">ZIP Archive (.zip)</option>
+                    <option value="IMAGE">Image File</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Approx Size</label>
+                  <input
+                    type="text"
+                    value={formData.fileSize}
+                    onChange={(e) => setFormData({ ...formData, fileSize: e.target.value })}
+                    placeholder="e.g. 1.2 MB or 450 KB"
+                    className="w-full border rounded-lg p-2.5 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Publish Date *</label>
+                <input
+                  type="date"
+                  required
+                  value={formData.publishDate}
+                  onChange={(e) => setFormData({ ...formData, publishDate: e.target.value })}
+                  className="w-full border rounded-lg p-2.5 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description (English)</label>
+                <textarea
+                  rows={2}
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Brief note about this document..."
+                  className="w-full border rounded-lg p-2.5 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description (Nepali)</label>
+                <textarea
+                  rows={2}
+                  value={formData.descriptionNp}
+                  onChange={(e) => setFormData({ ...formData, descriptionNp: e.target.value })}
+                  placeholder="दस्तावेज सम्बन्धी संक्षिप्त विवरण..."
+                  className="w-full border rounded-lg p-2.5 text-sm"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarOpen(false)}
+                  className="w-1/2 border border-gray-300 text-gray-700 py-2.5 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-1/2 bg-primary text-white py-2.5 rounded-lg hover:bg-primary-dark font-medium disabled:opacity-50"
+                >
+                  {submitting ? 'Saving...' : 'Save Document'}
+                </button>
+              </div>
+
+              {editingItem && (
+                <button
+                  type="button"
+                  onClick={() => setDeleteTargetId(editingItem.id)}
+                  className="w-full bg-red-50 text-red-600 py-2.5 rounded-lg font-bold hover:bg-red-100 border border-red-200 transition flex items-center justify-center gap-2 mt-2"
+                >
+                  <Trash2 className="w-4 h-4" /> Delete This Download Document
+                </button>
+              )}
             </form>
           </div>
         </div>
@@ -937,6 +1472,7 @@ function GalleryAdmin() {
   const [submitting, setSubmitting] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -1001,7 +1537,6 @@ function GalleryAdmin() {
       setEditingItem(null);
       setIsSidebarOpen(false);
       loadGallery();
-      alert('Gallery item saved successfully! 📸');
     } catch (e) {
       handleFirestoreError(e, editingItem ? OperationType.UPDATE : OperationType.WRITE, 'gallery');
     } finally {
@@ -1022,14 +1557,18 @@ function GalleryAdmin() {
     setIsSidebarOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Delete this gallery item?')) {
-      try {
-        await deleteDoc(doc(db, 'gallery', id));
-        loadGallery();
-      } catch (e) {
-        handleFirestoreError(e, OperationType.DELETE, 'gallery');
+  const confirmDelete = async () => {
+    if (!deleteTargetId) return;
+    try {
+      await deleteDoc(doc(db, 'gallery', deleteTargetId));
+      setDeleteTargetId(null);
+      if (editingItem && editingItem.id === deleteTargetId) {
+        setIsSidebarOpen(false);
+        setEditingItem(null);
       }
+      loadGallery();
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, 'gallery');
     }
   };
 
@@ -1080,7 +1619,7 @@ function GalleryAdmin() {
                 <button onClick={() => handleEdit(g)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="Edit">
                   <Edit className="w-4 h-4" />
                 </button>
-                <button onClick={() => handleDelete(g.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Delete">
+                <button onClick={() => setDeleteTargetId(g.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Delete">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -1093,6 +1632,15 @@ function GalleryAdmin() {
           )}
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmDialog
+        isOpen={deleteTargetId !== null}
+        title="Delete Gallery Item"
+        message="Are you sure you want to delete this media item from the gallery?"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTargetId(null)}
+      />
 
       {/* Form Sidebar */}
       {isSidebarOpen && (
@@ -1190,6 +1738,16 @@ function GalleryAdmin() {
                   {submitting ? 'Saving...' : 'Save Item'}
                 </button>
               </div>
+
+              {editingItem && (
+                <button
+                  type="button"
+                  onClick={() => setDeleteTargetId(editingItem.id)}
+                  className="w-full bg-red-50 text-red-600 py-2.5 rounded-lg font-bold hover:bg-red-100 border border-red-200 transition flex items-center justify-center gap-2 mt-2"
+                >
+                  <Trash2 className="w-4 h-4" /> Delete This Gallery Item
+                </button>
+              )}
             </form>
           </div>
         </div>
@@ -1214,7 +1772,14 @@ function SettingsAdmin() {
     principalImageUrl: '',
     heroImageUrl: '',
     school_logo_url: '',
-    announcementText: ''
+    announcementText: '',
+    helplineTitle: '',
+    helplineLocation: '',
+    helplineProvince: '',
+    helplinePhone: '',
+    helplineHours: '',
+    helplineEmail: '',
+    helplineDept: ''
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1241,7 +1806,14 @@ function SettingsAdmin() {
             principalImageUrl: data.principalImageUrl || '',
             heroImageUrl: data.heroImageUrl || '',
             school_logo_url: data.school_logo_url || '',
-            announcementText: data.announcementText || ''
+            announcementText: data.announcementText || '',
+            helplineTitle: data.helplineTitle || '',
+            helplineLocation: data.helplineLocation || '',
+            helplineProvince: data.helplineProvince || '',
+            helplinePhone: data.helplinePhone || '',
+            helplineHours: data.helplineHours || '',
+            helplineEmail: data.helplineEmail || '',
+            helplineDept: data.helplineDept || ''
           });
         }
       } catch (e) {
@@ -1313,6 +1885,36 @@ function SettingsAdmin() {
             <label className="block text-sm font-medium text-gray-700 mb-1">Phone Numbers (comma separated)</label>
             <input type="text" name="phoneNumbers" value={formData.phoneNumbers} onChange={handleChange} className="w-full border p-2 rounded-md focus:ring-2 focus:ring-blue-500" />
           </div>
+          <h4 className="font-bold text-primary border-b pb-2 pt-4">Quick School Helpline (Homepage Banner)</h4>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Helpline Title</label>
+            <input type="text" name="helplineTitle" value={formData.helplineTitle} onChange={handleChange} className="w-full border p-2 rounded-md focus:ring-2 focus:ring-blue-500" placeholder="Quick School Helpline" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Helpline Location / Address</label>
+            <input type="text" name="helplineLocation" value={formData.helplineLocation} onChange={handleChange} className="w-full border p-2 rounded-md focus:ring-2 focus:ring-blue-500" placeholder="Khahare, Lamjung, Nepal" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Helpline Province / Region</label>
+            <input type="text" name="helplineProvince" value={formData.helplineProvince} onChange={handleChange} className="w-full border p-2 rounded-md focus:ring-2 focus:ring-blue-500" placeholder="Gandaki Province" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Helpline Phone Numbers</label>
+            <input type="text" name="helplinePhone" value={formData.helplinePhone} onChange={handleChange} className="w-full border p-2 rounded-md focus:ring-2 focus:ring-blue-500" placeholder="+977 066-XXXXXX / 98XXXXXXXX" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Helpline Office Hours</label>
+            <input type="text" name="helplineHours" value={formData.helplineHours} onChange={handleChange} className="w-full border p-2 rounded-md focus:ring-2 focus:ring-blue-500" placeholder="Sunday - Friday: 9:00 AM - 4:30 PM" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Helpline Email Address</label>
+            <input type="email" name="helplineEmail" value={formData.helplineEmail} onChange={handleChange} className="w-full border p-2 rounded-md focus:ring-2 focus:ring-blue-500" placeholder="info@vidhyajyoti.edu.np" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Helpline Department / Desk</label>
+            <input type="text" name="helplineDept" value={formData.helplineDept} onChange={handleChange} className="w-full border p-2 rounded-md focus:ring-2 focus:ring-blue-500" placeholder="Administrative Office" />
+          </div>
+
           <h4 className="font-bold text-primary border-b pb-2 pt-4">Social Media</h4>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Facebook URL</label>
@@ -1404,6 +2006,7 @@ function AdminManagement() {
   const [admins, setAdmins] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [newEmail, setNewEmail] = useState('');
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const { user } = useAuth();
 
   useEffect(() => { loadAdmins(); }, []);
@@ -1418,6 +2021,17 @@ function AdminManagement() {
       setLoading(false); 
     }
   }
+
+  const confirmDelete = async () => {
+    if (!deleteTargetId) return;
+    try {
+      await deleteDoc(doc(db, 'admins', deleteTargetId));
+      setDeleteTargetId(null);
+      loadAdmins();
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, 'admins');
+    }
+  };
 
   const handleAddAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1447,13 +2061,9 @@ function AdminManagement() {
             </div>
             {admin.id !== user?.uid && (
               <button 
-                onClick={async () => {
-                   if(confirm('Remove this admin?')) {
-                     await deleteDoc(doc(db, 'admins', admin.id));
-                     loadAdmins();
-                   }
-                }}
-                className="text-red-500 hover:text-red-700"
+                onClick={() => setDeleteTargetId(admin.id)}
+                className="text-red-500 hover:text-red-700 p-2"
+                title="Remove Admin"
               >
                 <Trash2 className="w-5 h-5" />
               </button>
@@ -1461,6 +2071,14 @@ function AdminManagement() {
           </div>
         ))}
       </div>
+
+      <ConfirmDialog
+        isOpen={deleteTargetId !== null}
+        title="Remove Administrator"
+        message="Are you sure you want to revoke admin privileges for this account?"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTargetId(null)}
+      />
     </div>
   );
 }
@@ -1524,6 +2142,7 @@ export default function Admin() {
   const tabs = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
     { name: 'Calendar & Pre-Notices', path: '/admin/calendar', icon: CalendarIcon },
+    { name: 'Downloads 📁', path: '/admin/downloads', icon: FolderDown },
     { name: 'Gallery 📸', path: '/admin/gallery', icon: ImageIcon },
     { name: 'Notices', path: '/admin/notices', icon: FileText },
     { name: 'Staff', path: '/admin/staff', icon: Users },
@@ -1575,6 +2194,7 @@ export default function Admin() {
         <Routes>
           <Route path="/" element={<div className="bg-white p-6 rounded-lg shadow"><h3 className="text-2xl font-bold mb-4">Welcome to Admin Dashboard</h3><p>Select a tab from the sidebar to manage content.</p></div>} />
           <Route path="/calendar" element={<CalendarEventsAdmin />} />
+          <Route path="/downloads" element={<DownloadsAdmin />} />
           <Route path="/gallery" element={<GalleryAdmin />} />
           <Route path="/notices" element={<NoticesAdmin />} />
           <Route path="/staff" element={<StaffAdmin />} />
