@@ -6,10 +6,7 @@ service cloud.firestore {
     
     // Check if user is admin (Bootstrap email or has admin doc)
     function isBootstrappedAdmin() {
-      return isSignedIn() && (
-        request.auth.token.email == 'ronitadhikari690@gmail.com' ||
-        (request.auth.token.keys().hasAll(['email']) && request.auth.token.email == 'ronitadhikari690@gmail.com')
-      );
+      return isSignedIn() && request.auth.token.email == 'ronitadhikari690@gmail.com';
     }
     
     function isAdmin() {
@@ -54,7 +51,30 @@ service cloud.firestore {
       allow read: if true;
       allow create, delete: if isAdmin();
       allow update: if isAdmin() || (
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['wishesCount', 'comments'])
+        isSignedIn() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['wishesCount', 'comments']) &&
+        (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['wishesCount']) ||
+          (
+            request.resource.data.wishesCount is int &&
+            (
+              request.resource.data.wishesCount == resource.data.get('wishesCount', 0) + 1 ||
+              request.resource.data.wishesCount == resource.data.get('wishesCount', 0) - 1
+            )
+          )
+        ) &&
+        (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['comments']) ||
+          (
+            request.resource.data.comments is list &&
+            request.resource.data.comments.size() == resource.data.get('comments', []).size() + 1 &&
+            request.resource.data.comments.size() <= 200 &&
+            request.resource.data.comments[0].text is string &&
+            request.resource.data.comments[0].text.size() <= 300 &&
+            request.resource.data.comments[0].name is string &&
+            request.resource.data.comments[0].name.size() <= 80
+          )
+        )
       );
     }
 
