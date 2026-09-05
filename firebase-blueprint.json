@@ -51,6 +51,8 @@
         "heroSubtitle": { "type": "string" },
         "principalImageUrl": { "type": "string" },
         "heroImageUrl": { "type": "string" },
+        "heroMediaType": { "type": "string", "enum": ["image", "video"] },
+        "heroVideoUrl": { "type": "string" },
         "announcementText": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }

@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import { Upload } from 'lucide-react';
-import { compressImage } from '../utils/imageCompressor';
+import { uploadImageToStorage } from '../utils/imageCompressor';
 
 interface InlineImageEditProps {
   settingKey: string;
@@ -25,8 +25,9 @@ export function InlineImageEdit({ settingKey, fallbackUrl, className = '', alt =
     
     setUploading(true);
     try {
-      const compressedDataUrl = await compressImage(file, 1000, 1000, 0.75);
-      await updateSetting(settingKey, compressedDataUrl);
+      const storagePath = `images/settings/${settingKey}-${Date.now()}`;
+      const downloadUrl = await uploadImageToStorage(file, storagePath);
+      await updateSetting(settingKey, downloadUrl);
     } catch (err) {
       console.error("Failed to save image", err);
       alert("Failed to update image. Please try a different image.");

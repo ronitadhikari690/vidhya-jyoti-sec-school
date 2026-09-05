@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { doc, onSnapshot, updateDoc, setDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { compressImage } from '../utils/imageCompressor';
+import { uploadImageToStorage } from '../utils/imageCompressor';
 
 interface SettingsContextType {
   settings: any;
@@ -27,7 +27,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const updateSetting = async (key: string, value: any) => {
     let valToSave = value;
     if (typeof value === 'string' && value.startsWith('data:image/')) {
-      valToSave = await compressImage(value, 1000, 1000, 0.75);
+      valToSave = await uploadImageToStorage(value, `images/settings/${key}-${Date.now()}`);
     }
     try {
       const docRef = doc(db, 'settings', 'general');

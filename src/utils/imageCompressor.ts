@@ -1,8 +1,61 @@
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../firebase';
+
+/**
+ * Converts a base64 Data URL to a binary Blob for Firebase Storage upload.
+ */
+export function dataURLtoBlob(dataurl: string): Blob {
+  const arr = dataurl.split(',');
+  const mimeMatch = arr[0].match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new Blob([u8arr], { type: mime });
+}
+
+/**
+ * Compresses an image and uploads it to Firebase Storage, returning the download URL.
+ */
+export async function uploadImageToStorage(
+  input: File | string,
+  storagePath: string,
+  maxWidth = 1200,
+  maxHeight = 1200,
+  quality = 0.8
+): Promise<string> {
+  // If already an HTTP/HTTPS URL, return directly
+  if (typeof input === 'string' && (input.startsWith('http://') || input.startsWith('https://'))) {
+    return input;
+  }
+
+  // Client-side compression before upload
+  const compressedDataUrl = await compressImage(input, maxWidth, maxHeight, quality);
+  if (!compressedDataUrl) {
+    throw new Error('Failed to process image for upload');
+  }
+
+  if (!compressedDataUrl.startsWith('data:image/')) {
+    return compressedDataUrl;
+  }
+
+  const blob = dataURLtoBlob(compressedDataUrl);
+  const storageRef = ref(storage, storagePath);
+
+  await uploadBytes(storageRef, blob, {
+    contentType: blob.type || 'image/jpeg'
+  });
+
+  return await getDownloadURL(storageRef);
+}
+
 /**
  * Utility to compress and resize image files or base64 Data URLs on the client side
  * before saving to Firestore to prevent exceeding the 1MB document limit.
  */
-
 export async function compressImage(
   input: File | string,
   maxWidth = 1000,

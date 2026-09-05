@@ -1,10 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LogIn, LogOut, LayoutDashboard, FileText, Users, Settings as SettingsIcon, Save, Plus, Trash2, Edit, X, Upload, Cake, Gift, Calendar as CalendarIcon, Image as ImageIcon, Bell, FolderDown, Link as LinkIcon, Download, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { LogIn, LogOut, LayoutDashboard, FileText, Users, Settings as SettingsIcon, Save, Plus, Trash2, Edit, X, Upload, Cake, Gift, Calendar as CalendarIcon, Image as ImageIcon, Bell, FolderDown, Link as LinkIcon, Download, CheckCircle2, AlertTriangle, Video } from 'lucide-react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { doc, getDoc, setDoc, collection, getDocs, addDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { compressImage } from '../utils/imageCompressor';
+import { compressImage, uploadImageToStorage } from '../utils/imageCompressor';
+import { uploadVideoToStorage, getVideoEmbedInfo } from '../utils/videoUtils';
+
+interface AdminErrorContextType {
+  setErrorBanner: (msg: string | null) => void;
+  reportError: (error: unknown, operationType: OperationType, path: string | null) => void;
+}
+
+const AdminErrorContext = React.createContext<AdminErrorContextType>({
+  setErrorBanner: () => {},
+  reportError: () => {}
+});
+
+export const useAdminError = () => React.useContext(AdminErrorContext);
 
 function ConfirmDialog({
   isOpen,
@@ -56,11 +69,13 @@ function ConfirmDialog({
 function ImageUpload({
   onUpload,
   label,
-  currentImageUrl
+  currentImageUrl,
+  pathPrefix = 'general'
 }: {
   onUpload: (url: string) => void;
   label: string;
   currentImageUrl?: string;
+  pathPrefix?: string;
 }) {
   const [uploading, setUploading] = useState(false);
   const [showUrlInput, setShowUrlInput] = useState(false);
@@ -73,11 +88,13 @@ function ImageUpload({
 
     setUploading(true);
     try {
-      const compressed = await compressImage(file, 1000, 1000, 0.75);
-      onUpload(compressed);
+      const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const storagePath = `images/${pathPrefix}/${Date.now()}-${sanitizedName}`;
+      const downloadUrl = await uploadImageToStorage(file, storagePath);
+      onUpload(downloadUrl);
     } catch (err) {
-      console.error('Failed to compress upload', err);
-      alert('Failed to process image. Please try another image.');
+      console.error('Failed to upload image', err);
+      alert('Failed to upload image. Please try another image.');
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -179,6 +196,7 @@ function ImageUpload({
 }
 
 function NoticesAdmin() {
+  const { reportError } = useAdminError();
   const [notices, setNotices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -207,7 +225,7 @@ function NoticesAdmin() {
       const docs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setNotices(docs);
     } catch (e) {
-      handleFirestoreError(e, OperationType.GET, 'notices');
+      reportError(e, OperationType.GET, 'notices');
     } finally {
       setLoading(false);
     }
@@ -237,15 +255,21 @@ function NoticesAdmin() {
       }
       loadNotices();
     } catch (e) {
-      handleFirestoreError(e, OperationType.DELETE, `notices/${deleteTargetId}`);
+      reportError(e, OperationType.DELETE, `notices/${deleteTargetId}`);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      let imageUrl = formData.imageUrl;
+      if (imageUrl && imageUrl.startsWith('data:image/')) {
+        imageUrl = await uploadImageToStorage(imageUrl, `images/notices/${Date.now()}`);
+      }
+
       const payload = {
         ...formData,
+        imageUrl,
         updatedAt: serverTimestamp()
       };
 
@@ -270,7 +294,7 @@ function NoticesAdmin() {
       });
       loadNotices();
     } catch (e) {
-      handleFirestoreError(e, editingNotice ? OperationType.UPDATE : OperationType.CREATE, 'notices');
+      reportError(e, editingNotice ? OperationType.UPDATE : OperationType.CREATE, 'notices');
     }
   };
 
@@ -382,6 +406,7 @@ function NoticesAdmin() {
 }
 
 function StaffAdmin() {
+  const { reportError } = useAdminError();
   const [staff, setStaff] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -406,7 +431,7 @@ function StaffAdmin() {
       const q = query(collection(db, 'staff'), orderBy('category'));
       const querySnapshot = await getDocs(q);
       setStaff(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    } catch (e) { handleFirestoreError(e, OperationType.GET, 'staff'); }
+    } catch (e) { reportError(e, OperationType.GET, 'staff'); }
     finally { setLoading(false); }
   }
 
@@ -427,21 +452,25 @@ function StaffAdmin() {
       }
       loadStaff();
     } catch (e) {
-      handleFirestoreError(e, OperationType.DELETE, `staff/${deleteTargetId}`);
+      reportError(e, OperationType.DELETE, `staff/${deleteTargetId}`);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const payload = { ...formData, updatedAt: serverTimestamp() };
+      let imageUrl = formData.imageUrl;
+      if (imageUrl && imageUrl.startsWith('data:image/')) {
+        imageUrl = await uploadImageToStorage(imageUrl, `images/staff/${Date.now()}`);
+      }
+      const payload = { ...formData, imageUrl, updatedAt: serverTimestamp() };
       if (editingStaff) await updateDoc(doc(db, 'staff', editingStaff.id), payload);
       else await addDoc(collection(db, 'staff'), { ...payload, createdAt: serverTimestamp() });
       setIsSidebarOpen(false);
       setEditingStaff(null);
       setFormData({ name: '', role: '', phone: '', subject: '', imageUrl: '', category: 'Teaching' });
       loadStaff();
-    } catch (e) { handleFirestoreError(e, editingStaff ? OperationType.UPDATE : OperationType.CREATE, 'staff'); }
+    } catch (e) { reportError(e, editingStaff ? OperationType.UPDATE : OperationType.CREATE, 'staff'); }
   };
 
   if (loading) return <div>Loading...</div>;
@@ -529,6 +558,7 @@ function StaffAdmin() {
 }
 
 function BirthdaysAdmin() {
+  const { reportError } = useAdminError();
   const [birthdays, setBirthdays] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -559,7 +589,7 @@ function BirthdaysAdmin() {
       docs.sort((a: any, b: any) => (a.birthdayDate || '').localeCompare(b.birthdayDate || ''));
       setBirthdays(docs);
     } catch (e) {
-      handleFirestoreError(e, OperationType.GET, 'birthdays');
+      reportError(e, OperationType.GET, 'birthdays');
     } finally {
       setLoading(false);
     }
@@ -573,10 +603,13 @@ function BirthdaysAdmin() {
     }
     setSubmitting(true);
     try {
-      const compressedPhoto = await compressImage(formData.photoUrl || '', 800, 800, 0.75);
+      let photoUrl = formData.photoUrl || '';
+      if (photoUrl && photoUrl.startsWith('data:image/')) {
+        photoUrl = await uploadImageToStorage(photoUrl, `images/birthdays/${Date.now()}`);
+      }
       const payload = {
         ...formData,
-        photoUrl: compressedPhoto,
+        photoUrl,
         updatedAt: serverTimestamp()
       };
 
@@ -603,7 +636,7 @@ function BirthdaysAdmin() {
       loadBirthdays();
     } catch (e) {
       console.error('Failed to save birthday entry:', e);
-      handleFirestoreError(e, editingItem ? OperationType.UPDATE : OperationType.WRITE, 'birthdays');
+      reportError(e, editingItem ? OperationType.UPDATE : OperationType.WRITE, 'birthdays');
     } finally {
       setSubmitting(false);
     }
@@ -634,7 +667,7 @@ function BirthdaysAdmin() {
       }
       loadBirthdays();
     } catch (e) {
-      handleFirestoreError(e, OperationType.DELETE, 'birthdays');
+      reportError(e, OperationType.DELETE, 'birthdays');
     }
   };
 
@@ -844,6 +877,7 @@ function BirthdaysAdmin() {
 }
 
 function CalendarEventsAdmin() {
+  const { reportError } = useAdminError();
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -872,7 +906,7 @@ function CalendarEventsAdmin() {
       docs.sort((a: any, b: any) => (a.adDate || '').localeCompare(b.adDate || ''));
       setEvents(docs);
     } catch (e) {
-      handleFirestoreError(e, OperationType.GET, 'calendar_events');
+      reportError(e, OperationType.GET, 'calendar_events');
     } finally {
       setLoading(false);
     }
@@ -908,7 +942,7 @@ function CalendarEventsAdmin() {
       setIsSidebarOpen(false);
       loadEvents();
     } catch (e) {
-      handleFirestoreError(e, editingItem ? OperationType.UPDATE : OperationType.WRITE, 'calendar_events');
+      reportError(e, editingItem ? OperationType.UPDATE : OperationType.WRITE, 'calendar_events');
     } finally {
       setSubmitting(false);
     }
@@ -937,7 +971,7 @@ function CalendarEventsAdmin() {
       }
       loadEvents();
     } catch (e) {
-      handleFirestoreError(e, OperationType.DELETE, 'calendar_events');
+      reportError(e, OperationType.DELETE, 'calendar_events');
     }
   };
 
@@ -1123,6 +1157,7 @@ function CalendarEventsAdmin() {
 }
 
 function DownloadsAdmin() {
+  const { reportError } = useAdminError();
   const [downloads, setDownloads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -1161,7 +1196,7 @@ function DownloadsAdmin() {
       const docs = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       setDownloads(docs);
     } catch (e) {
-      handleFirestoreError(e, OperationType.GET, 'downloads');
+      reportError(e, OperationType.GET, 'downloads');
     } finally {
       setLoading(false);
     }
@@ -1186,7 +1221,7 @@ function DownloadsAdmin() {
       setEditingItem(null);
       loadDownloads();
     } catch (e) {
-      handleFirestoreError(e, editingItem ? OperationType.UPDATE : OperationType.CREATE, 'downloads');
+      reportError(e, editingItem ? OperationType.UPDATE : OperationType.CREATE, 'downloads');
     } finally {
       setSubmitting(false);
     }
@@ -1219,7 +1254,7 @@ function DownloadsAdmin() {
       }
       loadDownloads();
     } catch (e) {
-      handleFirestoreError(e, OperationType.DELETE, 'downloads');
+      reportError(e, OperationType.DELETE, 'downloads');
     }
   };
 
@@ -1467,6 +1502,7 @@ function DownloadsAdmin() {
 }
 
 function GalleryAdmin() {
+  const { reportError } = useAdminError();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -1495,7 +1531,7 @@ function GalleryAdmin() {
       const docs = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       setItems(docs);
     } catch (e) {
-      handleFirestoreError(e, OperationType.GET, 'gallery');
+      reportError(e, OperationType.GET, 'gallery');
     } finally {
       setLoading(false);
     }
@@ -1508,7 +1544,7 @@ function GalleryAdmin() {
     try {
       let finalUrl = formData.url;
       if (formData.mediaType === 'image' && formData.url.startsWith('data:image')) {
-        finalUrl = await compressImage(formData.url, 1200, 1200, 0.8);
+        finalUrl = await uploadImageToStorage(formData.url, `images/gallery/${Date.now()}`);
       }
 
       const payload = {
@@ -1538,7 +1574,7 @@ function GalleryAdmin() {
       setIsSidebarOpen(false);
       loadGallery();
     } catch (e) {
-      handleFirestoreError(e, editingItem ? OperationType.UPDATE : OperationType.WRITE, 'gallery');
+      reportError(e, editingItem ? OperationType.UPDATE : OperationType.WRITE, 'gallery');
     } finally {
       setSubmitting(false);
     }
@@ -1568,7 +1604,7 @@ function GalleryAdmin() {
       }
       loadGallery();
     } catch (e) {
-      handleFirestoreError(e, OperationType.DELETE, 'gallery');
+      reportError(e, OperationType.DELETE, 'gallery');
     }
   };
 
@@ -1757,6 +1793,7 @@ function GalleryAdmin() {
 }
 
 function SettingsAdmin() {
+  const { reportError } = useAdminError();
   const [formData, setFormData] = useState({
     email: '',
     address: '',
@@ -1771,6 +1808,8 @@ function SettingsAdmin() {
     heroSubtitle: '',
     principalImageUrl: '',
     heroImageUrl: '',
+    heroMediaType: 'image',
+    heroVideoUrl: '',
     school_logo_url: '',
     announcementText: '',
     helplineTitle: '',
@@ -1805,6 +1844,8 @@ function SettingsAdmin() {
             heroSubtitle: data.heroSubtitle || '',
             principalImageUrl: data.principalImageUrl || '',
             heroImageUrl: data.heroImageUrl || '',
+            heroMediaType: data.heroMediaType || (data.heroVideoUrl ? 'video' : 'image'),
+            heroVideoUrl: data.heroVideoUrl || '',
             school_logo_url: data.school_logo_url || '',
             announcementText: data.announcementText || '',
             helplineTitle: data.helplineTitle || '',
@@ -1817,7 +1858,7 @@ function SettingsAdmin() {
           });
         }
       } catch (e) {
-        handleFirestoreError(e, OperationType.GET, 'settings/general');
+        reportError(e, OperationType.GET, 'settings/general');
       } finally {
         setLoading(false);
       }
@@ -1829,21 +1870,58 @@ function SettingsAdmin() {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const videoFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingVideo(true);
+    try {
+      const storagePath = `videos/hero-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      const downloadUrl = await uploadVideoToStorage(file, storagePath);
+      setFormData(prev => ({
+        ...prev,
+        heroVideoUrl: downloadUrl,
+        heroMediaType: 'video'
+      }));
+      alert('Video uploaded successfully!');
+    } catch (err: any) {
+      console.error('Failed to upload video:', err);
+      reportError(err, OperationType.WRITE, 'storage/videos');
+      alert('Failed to upload video. You can also paste a YouTube or Vimeo link.');
+    } finally {
+      setUploadingVideo(false);
+      if (videoFileInputRef.current) {
+        videoFileInputRef.current.value = '';
+      }
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
       const docRef = doc(db, 'settings', 'general');
       const phones = formData.phoneNumbers.split(',').map(p => p.trim()).filter(p => p !== '');
       
-      const compressedHero = await compressImage(formData.heroImageUrl || '', 1000, 1000, 0.75);
-      const compressedPrincipal = await compressImage(formData.principalImageUrl || '', 800, 800, 0.75);
-      const compressedLogo = await compressImage(formData.school_logo_url || '', 600, 600, 0.75);
+      let heroImageUrl = formData.heroImageUrl || '';
+      if (heroImageUrl.startsWith('data:image/')) {
+        heroImageUrl = await uploadImageToStorage(heroImageUrl, `images/settings/hero-${Date.now()}`);
+      }
+      let principalImageUrl = formData.principalImageUrl || '';
+      if (principalImageUrl.startsWith('data:image/')) {
+        principalImageUrl = await uploadImageToStorage(principalImageUrl, `images/settings/principal-${Date.now()}`);
+      }
+      let school_logo_url = formData.school_logo_url || '';
+      if (school_logo_url.startsWith('data:image/')) {
+        school_logo_url = await uploadImageToStorage(school_logo_url, `images/settings/logo-${Date.now()}`);
+      }
 
       const payload = {
         ...formData,
-        heroImageUrl: compressedHero,
-        principalImageUrl: compressedPrincipal,
-        school_logo_url: compressedLogo,
+        heroImageUrl,
+        principalImageUrl,
+        school_logo_url,
         phoneNumbers: phones,
         updatedAt: serverTimestamp()
       };
@@ -1851,13 +1929,13 @@ function SettingsAdmin() {
       await setDoc(docRef, payload, { merge: true });
       setFormData(prev => ({
         ...prev,
-        heroImageUrl: compressedHero,
-        principalImageUrl: compressedPrincipal,
-        school_logo_url: compressedLogo
+        heroImageUrl,
+        principalImageUrl,
+        school_logo_url
       }));
       alert('Settings saved successfully!');
     } catch (e) {
-      handleFirestoreError(e, OperationType.UPDATE, 'settings/general');
+      reportError(e, OperationType.UPDATE, 'settings/general');
       alert('Failed to save settings.');
     } finally {
       setSaving(false);
@@ -1957,15 +2035,152 @@ function SettingsAdmin() {
                 <input type="text" name="school_logo_url" value={formData.school_logo_url} onChange={handleChange} className="w-full border p-2 rounded-md text-sm focus:ring-2 focus:ring-blue-500" placeholder="https://..." />
               </div>
             </div>
-            <div>
-              <ImageUpload 
-                label="Hero Section Image" 
-                currentImageUrl={formData.heroImageUrl} 
-                onUpload={(url) => setFormData({...formData, heroImageUrl: url})} 
-              />
-              <div className="mt-2">
-                <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Or Paste URL</label>
-                <input type="text" name="heroImageUrl" value={formData.heroImageUrl} onChange={handleChange} className="w-full border p-2 rounded-md text-sm focus:ring-2 focus:ring-blue-500" />
+            {/* Hero Section Media: Photo vs Video */}
+            <div className="p-4 border border-slate-200 rounded-xl bg-slate-50/80 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h5 className="font-bold text-gray-800 text-sm">Hero Background Media</h5>
+                  <p className="text-xs text-gray-500">Choose whether the homepage displays a photo or a video background</p>
+                </div>
+                {/* Media Type Toggle */}
+                <div className="flex items-center p-1 bg-gray-200 rounded-lg">
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, heroMediaType: 'image' }))}
+                    className={`px-3 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                      formData.heroMediaType !== 'video' 
+                        ? 'bg-white text-blue-700 shadow-sm' 
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    <span>Photo</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, heroMediaType: 'video' }))}
+                    className={`px-3 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                      formData.heroMediaType === 'video' 
+                        ? 'bg-white text-blue-700 shadow-sm' 
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <Video className="w-3.5 h-3.5" />
+                    <span>Video</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Video URL & Upload */}
+              <div className="space-y-3 pt-2">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-gray-700">
+                      Hero Video URL (YouTube, Vimeo, Facebook, or MP4)
+                    </label>
+                    <span className="text-[11px] text-blue-600 font-medium">Auto-loops & muted</span>
+                  </div>
+                  <input
+                    type="text"
+                    name="heroVideoUrl"
+                    value={formData.heroVideoUrl}
+                    onChange={handleChange}
+                    className="w-full border p-2 rounded-md text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                    placeholder="e.g. YouTube, Vimeo, Facebook video, or MP4 URL"
+                  />
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    Accepts YouTube links, Vimeo links, Facebook video links, or direct MP4/WebM video links.
+                  </p>
+                </div>
+
+                {/* Upload MP4 file */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    ref={videoFileInputRef}
+                    onChange={handleVideoUpload}
+                    accept="video/mp4,video/webm"
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => videoFileInputRef.current?.click()}
+                    disabled={uploadingVideo}
+                    className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
+                  >
+                    {uploadingVideo ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                        <span>Uploading Video...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-3.5 h-3.5 text-gray-600" />
+                        <span>Upload MP4 / WebM Video</span>
+                      </>
+                    )}
+                  </button>
+                  {formData.heroVideoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, heroVideoUrl: '' }))}
+                      className="text-xs text-red-500 hover:text-red-700 underline cursor-pointer"
+                    >
+                      Clear Video
+                    </button>
+                  )}
+                </div>
+
+                {/* Video Live Preview in Admin */}
+                {formData.heroVideoUrl && (
+                  <div className="mt-3 p-2 bg-slate-900 rounded-lg overflow-hidden flex flex-col items-center justify-center">
+                    <span className="text-[11px] font-semibold text-gray-400 mb-1.5 self-start">Video Live Preview:</span>
+                    {(() => {
+                      const info = getVideoEmbedInfo(formData.heroVideoUrl);
+                      if (!info) return <span className="text-gray-400 text-xs py-4">Invalid video URL</span>;
+                      if (info.type === 'youtube' || info.type === 'vimeo' || info.type === 'facebook') {
+                        return (
+                          <iframe
+                            src={info.embedUrl}
+                            className="w-full aspect-video max-h-48 rounded border-0"
+                            title="Video Preview"
+                            allow="autoplay; encrypted-media"
+                          />
+                        );
+                      }
+                      return (
+                        <video src={info.srcUrl} controls className="w-full max-h-48 rounded object-contain" />
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+
+              {/* Poster / Fallback Image */}
+              <div className="pt-3 border-t border-slate-200">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  {formData.heroMediaType === 'video' ? 'Video Poster / Fallback Image' : 'Hero Section Image'}
+                </label>
+                <p className="text-[11px] text-gray-500 mb-2">
+                  {formData.heroMediaType === 'video' 
+                    ? 'Shown while the video loads or on devices where video autoplay is restricted.'
+                    : 'Shown as the main background banner on the homepage.'}
+                </p>
+                <ImageUpload 
+                  label="" 
+                  currentImageUrl={formData.heroImageUrl} 
+                  onUpload={(url) => setFormData({...formData, heroImageUrl: url})} 
+                />
+                <div className="mt-2">
+                  <label className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Or Paste Image URL</label>
+                  <input 
+                    type="text" 
+                    name="heroImageUrl" 
+                    value={formData.heroImageUrl} 
+                    onChange={handleChange} 
+                    className="w-full border p-2 rounded-md text-sm focus:ring-2 focus:ring-blue-500 bg-white" 
+                  />
+                </div>
               </div>
             </div>
             <div>
@@ -2003,6 +2218,7 @@ function SettingsAdmin() {
 }
 
 function AdminManagement() {
+  const { reportError } = useAdminError();
   const [admins, setAdmins] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [newEmail, setNewEmail] = useState('');
@@ -2016,7 +2232,7 @@ function AdminManagement() {
       const querySnapshot = await getDocs(collection(db, 'admins'));
       setAdmins(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (e) { 
-      handleFirestoreError(e, OperationType.GET, 'admins'); 
+      reportError(e, OperationType.GET, 'admins'); 
     } finally { 
       setLoading(false); 
     }
@@ -2029,7 +2245,7 @@ function AdminManagement() {
       setDeleteTargetId(null);
       loadAdmins();
     } catch (e) {
-      handleFirestoreError(e, OperationType.DELETE, 'admins');
+      reportError(e, OperationType.DELETE, 'admins');
     }
   };
 
@@ -2086,6 +2302,15 @@ function AdminManagement() {
 export default function Admin() {
   const { user, isAdmin, loading, isLoggingIn, loginError, loginWithGoogle, logout } = useAuth();
   const location = useLocation();
+  const [errorBanner, setErrorBanner] = useState<string | null>(null);
+
+  const reportError = (error: unknown, operationType: OperationType, path: string | null) => {
+    try {
+      handleFirestoreError(error, operationType, path);
+    } catch (err: any) {
+      setErrorBanner(err.message);
+    }
+  };
 
   if (loading) return <div className="p-20 text-center text-gray-500">Loading...</div>;
 
@@ -2191,17 +2416,34 @@ export default function Admin() {
       </aside>
 
       <main className="flex-1 p-8">
-        <Routes>
-          <Route path="/" element={<div className="bg-white p-6 rounded-lg shadow"><h3 className="text-2xl font-bold mb-4">Welcome to Admin Dashboard</h3><p>Select a tab from the sidebar to manage content.</p></div>} />
-          <Route path="/calendar" element={<CalendarEventsAdmin />} />
-          <Route path="/downloads" element={<DownloadsAdmin />} />
-          <Route path="/gallery" element={<GalleryAdmin />} />
-          <Route path="/notices" element={<NoticesAdmin />} />
-          <Route path="/staff" element={<StaffAdmin />} />
-          <Route path="/birthdays" element={<BirthdaysAdmin />} />
-          <Route path="/admins" element={<AdminManagement />} />
-          <Route path="/settings" element={<SettingsAdmin />} />
-        </Routes>
+        {errorBanner && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-800 rounded-xl flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
+              <span className="text-sm font-medium">{errorBanner}</span>
+            </div>
+            <button
+              onClick={() => setErrorBanner(null)}
+              className="text-red-500 hover:text-red-700 p-1 rounded-lg hover:bg-red-100 transition cursor-pointer"
+              title="Dismiss error"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+        <AdminErrorContext.Provider value={{ setErrorBanner, reportError }}>
+          <Routes>
+            <Route path="/" element={<div className="bg-white p-6 rounded-lg shadow"><h3 className="text-2xl font-bold mb-4">Welcome to Admin Dashboard</h3><p>Select a tab from the sidebar to manage content.</p></div>} />
+            <Route path="/calendar" element={<CalendarEventsAdmin />} />
+            <Route path="/downloads" element={<DownloadsAdmin />} />
+            <Route path="/gallery" element={<GalleryAdmin />} />
+            <Route path="/notices" element={<NoticesAdmin />} />
+            <Route path="/staff" element={<StaffAdmin />} />
+            <Route path="/birthdays" element={<BirthdaysAdmin />} />
+            <Route path="/admins" element={<AdminManagement />} />
+            <Route path="/settings" element={<SettingsAdmin />} />
+          </Routes>
+        </AdminErrorContext.Provider>
       </main>
     </div>
   );

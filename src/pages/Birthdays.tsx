@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Gift, Calendar, Sparkles, User, Heart, MessageCircle, Plus, Search, Cake, PartyPopper, Award, Send } from 'lucide-react';
-import { collection, getDocs, addDoc, doc, updateDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, addDoc, doc, updateDoc, increment, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
@@ -121,7 +121,7 @@ export default function Birthdays() {
     // Update Firestore
     try {
       const docRef = doc(db, 'birthdays', item.id);
-      await updateDoc(docRef, { wishesCount: newCount });
+      await updateDoc(docRef, { wishesCount: increment(isWished ? -1 : 1) });
     } catch (err) {
       console.error('Error updating wish count:', err);
     }
@@ -153,7 +153,7 @@ export default function Birthdays() {
       if (!selectedItemForWish.id.startsWith('b')) {
         const docRef = doc(db, 'birthdays', selectedItemForWish.id);
         await updateDoc(docRef, {
-          wishesCount: newCount,
+          wishesCount: increment(1),
           comments: updatedComments
         });
       }

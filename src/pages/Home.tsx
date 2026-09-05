@@ -13,6 +13,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useSettings } from '../context/SettingsContext';
 import { InlineEdit } from '../components/InlineEdit';
 import { InlineImageEdit } from '../components/InlineImageEdit';
+import { HeroMedia } from '../components/HeroMedia';
 import { motion } from 'motion/react';
 // @ts-ignore
 import heroBgImage from '../assets/images/regenerated_image_1777723287199.jpg';
@@ -92,7 +93,7 @@ export default function Home() {
       y: -6,
       scale: 1.02,
       transition: {
-        type: "spring",
+        type: "spring" as const,
         stiffness: 400,
         damping: 15
       }
@@ -115,15 +116,7 @@ export default function Home() {
 
       {/* Hero Section */}
       <section className="relative bg-gray-950 overflow-hidden">
-        <div className="absolute inset-0">
-          <InlineImageEdit
-            settingKey="heroImageUrl"
-            fallbackUrl={heroBgImage}
-            className="w-full h-full object-cover opacity-90"
-            alt="School students"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-black/30"></div>
-        </div>
+        <HeroMedia fallbackUrl={heroBgImage} />
         
         <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-28 my-4">
           <div className="text-center max-w-4xl mx-auto">

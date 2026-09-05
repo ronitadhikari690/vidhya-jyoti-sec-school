@@ -130,7 +130,7 @@ export default function Students() {
       };
 
       const docRef = await addDoc(collection(db, 'student_resources'), newDoc);
-      setResources(prev => [{ id: docRef.id, ...newDoc }, ...prev]);
+      setResources(prev => [{ id: docRef.id, ...newDoc } as StudentResource, ...prev]);
       
       // Reset & close
       setFormData({

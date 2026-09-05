@@ -2,5 +2,5 @@
   "name": "Vidhya Jyoti Secondary School",
   "description": "A modern, responsive, and professional school website for Vidhya Jyoti Secondary School, Khahare, Lamjung, Nepal.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
